@@ -857,6 +857,7 @@ status_t OMXNodeInstance::setInternalOption(
         case IOMX::INTERNAL_OPTION_SUSPEND:
         case IOMX::INTERNAL_OPTION_REPEAT_PREVIOUS_FRAME_DELAY:
         case IOMX::INTERNAL_OPTION_MAX_TIMESTAMP_GAP:
+        case IOMX::INTERNAL_OPTION_START_TIME:
         {
             const sp<GraphicBufferSource> &bufferSource =
                 getGraphicBufferSource();
@@ -881,7 +882,8 @@ status_t OMXNodeInstance::setInternalOption(
                 int64_t delayUs = *(int64_t *)data;
 
                 return bufferSource->setRepeatPreviousFrameDelayUs(delayUs);
-            } else {
+            } else if (type ==
+                    IOMX::INTERNAL_OPTION_MAX_TIMESTAMP_GAP){
                 if (size != sizeof(int64_t)) {
                     return INVALID_OPERATION;
                 }
@@ -889,6 +891,14 @@ status_t OMXNodeInstance::setInternalOption(
                 int64_t maxGapUs = *(int64_t *)data;
 
                 return bufferSource->setMaxTimestampGapUs(maxGapUs);
+            } else { // IOMX::INTERNAL_OPTION_START_TIME
+                if (size != sizeof(int64_t)) {
+                    return INVALID_OPERATION;
+                }
+
+                int64_t skipFramesBeforeUs = *(int64_t *)data;
+
+                bufferSource->setSkipFramesBeforeUs(skipFramesBeforeUs);
             }
 
             return OK;
