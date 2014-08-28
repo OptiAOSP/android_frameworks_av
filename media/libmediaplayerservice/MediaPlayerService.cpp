@@ -42,6 +42,7 @@
 #include <utils/Errors.h>  // for status_t
 #include <utils/String8.h>
 #include <utils/SystemClock.h>
+#include <utils/Timers.h>
 #include <utils/Vector.h>
 
 #include <media/IMediaHTTPService.h>
@@ -1473,6 +1474,12 @@ status_t MediaPlayerService::AudioOutput::getPosition(uint32_t *position) const
     return mTrack->getPosition(position);
 }
 
+status_t MediaPlayerService::AudioOutput::getTimestamp(AudioTimestamp &ts) const
+{
+    if (mTrack == 0) return NO_INIT;
+    return mTrack->getTimestamp(ts);
+}
+
 status_t MediaPlayerService::AudioOutput::getFramesWritten(uint32_t *frameswritten) const
 {
     if (mTrack == 0) return NO_INIT;
@@ -1942,6 +1949,15 @@ status_t MediaPlayerService::AudioCache::getPosition(uint32_t *position) const
 {
     if (position == 0) return BAD_VALUE;
     *position = mSize;
+    return NO_ERROR;
+}
+
+status_t MediaPlayerService::AudioCache::getTimestamp(AudioTimestamp &ts) const
+{
+    ts.mPosition = mSize / mFrameSize;
+    nsecs_t now = systemTime(SYSTEM_TIME_MONOTONIC);
+    ts.mTime.tv_sec = now / 1000000000LL;
+    ts.mTime.tv_nsec = now - (1000000000LL * ts.mTime.tv_sec);
     return NO_ERROR;
 }
 
