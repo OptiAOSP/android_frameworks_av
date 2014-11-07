@@ -96,6 +96,11 @@ LOCAL_SHARED_LIBRARIES := \
         libz \
         libpowermanager
 
+
+ifeq ($(BOARD_USES_LEGACY_ACQUIRE_WVM),true)
+LOCAL_CFLAGS := -DUSES_LEGACY_ACQUIRE_WVM
+endif
+
 LOCAL_STATIC_LIBRARIES := \
         libstagefright_color_conversion \
         libstagefright_aacenc \
