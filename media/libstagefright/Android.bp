@@ -136,6 +136,7 @@ cc_library_shared {
         "-Wno-error=deprecated-declarations",
         "-Wall",
         "-DCAMCORDER_GRALLOC_SOURCE",
+        "-DBOARD_CANT_REALLOCATE_OMX_BUFFERS",
     ],
 
     product_variables: {
