@@ -136,6 +136,8 @@ endif
 LOCAL_SANITIZE := unsigned-integer-overflow signed-integer-overflow cfi
 LOCAL_SANITIZE_DIAG := cfi
 
+LOCAL_CFLAGS += -DBOARD_CANT_REALLOCATE_OMX_BUFFERS
+
 LOCAL_MODULE:= libstagefright
 
 LOCAL_MODULE_TAGS := optional
