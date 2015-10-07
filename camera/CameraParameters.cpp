@@ -21,6 +21,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <camera/CameraParameters.h>
+#include "camera/CameraParametersExtra.h"
 
 namespace android {
 // Parameter keys to communicate between camera application and driver.
@@ -146,26 +147,11 @@ const char CameraParameters::SCENE_MODE_FIREWORKS[] = "fireworks";
 const char CameraParameters::SCENE_MODE_SPORTS[] = "sports";
 const char CameraParameters::SCENE_MODE_PARTY[] = "party";
 const char CameraParameters::SCENE_MODE_CANDLELIGHT[] = "candlelight";
-#ifdef STE_SAMSUNG_HARDWARE
-const char CameraParameters::SCENE_MODE_AQUA[] = "aqua";
-const char CameraParameters::SCENE_MODE_BACKLIGHT[] = "backlight";
-const char CameraParameters::SCENE_MODE_DUSKDAWN[] = "duskdawn";
-const char CameraParameters::SCENE_MODE_FALLCOLOR[] = "fallcolor";
-const char CameraParameters::SCENE_MODE_TEXT[] = "text";
-#endif
 const char CameraParameters::SCENE_MODE_BARCODE[] = "barcode";
 const char CameraParameters::SCENE_MODE_HDR[] = "hdr";
 
 const char CameraParameters::PIXEL_FORMAT_YUV422SP[] = "yuv422sp";
 const char CameraParameters::PIXEL_FORMAT_YUV420SP[] = "yuv420sp";
-#ifdef STE_HARDWARE
-const char CameraParameters::PIXEL_FORMAT_YUV420SPNV12[] = "yuv420spnv12";
-const char CameraParameters::PIXEL_FORMAT_YUV420MB[] = "yuv420mb";
-const char CameraParameters::PIXEL_FORMAT_YVU422SP[] = "yvu422sp";
-const char CameraParameters::PIXEL_FORMAT_YVU422P[] = "yvu422p";
-const char CameraParameters::PIXEL_FORMAT_YVU420SP[] = "yvu420sp";
-const char CameraParameters::PIXEL_FORMAT_YVU420P[]  = "yvu420p";
-#endif
 const char CameraParameters::PIXEL_FORMAT_YUV422I[] = "yuv422i-yuyv";
 const char CameraParameters::PIXEL_FORMAT_YUV420P[]  = "yuv420p";
 const char CameraParameters::PIXEL_FORMAT_RGB565[] = "rgb565";
@@ -187,10 +173,8 @@ const char CameraParameters::FOCUS_MODE_CONTINUOUS_PICTURE[] = "continuous-pictu
 const char CameraParameters::LIGHTFX_LOWLIGHT[] = "low-light";
 const char CameraParameters::LIGHTFX_HDR[] = "high-dynamic-range";
 
-#ifdef STE_HARDWARE
-// keys for record stride and sliceheight
-const char CameraParameters::KEY_RECORD_STRIDE[] = "record-stride";
-const char CameraParameters::KEY_RECORD_SLICE_HEIGHT[] = "record-slice-height";
+#ifdef CAMERA_PARAMETERS_EXTRA_C
+CAMERA_PARAMETERS_EXTRA_C
 #endif
 
 CameraParameters::CameraParameters()

@@ -636,6 +636,9 @@ private:
 
     static int __set_usage(struct preview_stream_ops* w, int usage)
     {
+#ifdef STE_HARDWARE
+        usage |= GRALLOC_USAGE_PRIVATE_0;
+#endif
         ANativeWindow *a = anw(w);
         return native_window_set_usage(a, usage);
     }
