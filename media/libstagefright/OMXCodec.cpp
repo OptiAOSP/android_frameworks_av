@@ -178,20 +178,6 @@ static int CompareSoftwareCodecsFirst(
     return 0;
 }
 
-#ifdef STE_HARDWARE
-uint32_t OMXCodec::OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue) {
-    switch (omxValue) {
-        case OMX_STE_COLOR_FormatYUV420PackedSemiPlanarMB:
-            return HAL_PIXEL_FORMAT_YCBCR42XMBN;
-        case OMX_COLOR_FormatYUV420Planar:
-            return HAL_PIXEL_FORMAT_YCbCr_420_P;
-        default:
-            ALOGI("Unknown OMX pixel format (0x%X), passing it on unchanged", omxValue);
-            return omxValue;
-    }
-}
-#endif
-
 // static
 void OMXCodec::findMatchingCodecs(
         const char *mime,
@@ -262,12 +248,6 @@ uint32_t OMXCodec::getComponentQuirks(
                 index, "output-buffers-are-unreadable")) {
         quirks |= kOutputBuffersAreUnreadable;
     }
-#ifdef STE_HARDWARE
-    if (list->codecHasQuirk(
-                index, "requires-store-metadata-before-idle")) {
-        quirks |= kRequiresStoreMetaDataBeforeIdle;
-    }
-#endif
 
     return quirks;
 }
@@ -727,9 +707,6 @@ static size_t getFrameSize(
         case OMX_COLOR_FormatYUV420Planar:
         case OMX_COLOR_FormatYUV420SemiPlanar:
         case OMX_TI_COLOR_FormatYUV420PackedSemiPlanar:
-#ifdef STE_HARDWARE
-        case OMX_STE_COLOR_FormatYUV420PackedSemiPlanarMB:
-#endif
         /*
         * FIXME: For the Opaque color format, the frame size does not
         * need to be (w*h*3)/2. It just needs to
@@ -1407,10 +1384,6 @@ void OMXCodec::setComponentRole(
             "video_decoder.mpeg4", "video_encoder.mpeg4" },
         { MEDIA_MIMETYPE_VIDEO_H263,
             "video_decoder.h263", "video_encoder.h263" },
-#ifdef STE_HARDWARE
-        { MEDIA_MIMETYPE_VIDEO_VC1,
-            "video_decoder.vc1", "video_encoder.vc1" },
-#endif
         { MEDIA_MIMETYPE_VIDEO_VP8,
             "video_decoder.vp8", "video_encoder.vp8" },
         { MEDIA_MIMETYPE_VIDEO_VP9,
@@ -1490,16 +1463,6 @@ status_t OMXCodec::init() {
     CHECK_EQ((int)mState, (int)LOADED);
 
     status_t err;
-#ifdef STE_HARDWARE
-    if ((mQuirks & kRequiresStoreMetaDataBeforeIdle)
-        && (mFlags & kStoreMetaDataInVideoBuffers)) {
-        err = mOMX->storeMetaDataInBuffers(mNode, kPortIndexInput, OMX_TRUE);
-        if (err != OK) {
-            ALOGE("Storing meta data in video buffers is not supported");
-            return err;
-        }
-    }
-#endif
     if (!(mQuirks & kRequiresLoadedToIdleAfterAllocation)) {
         err = mOMX->sendCommand(mNode, OMX_CommandStateSet, OMX_StateIdle);
         CHECK_EQ(err, (status_t)OK);
@@ -1555,12 +1518,7 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
     }
 
     status_t err = OK;
-#ifdef STE_HARDWARE
-    if (!(mQuirks & kRequiresStoreMetaDataBeforeIdle)
-            && (mFlags & kStoreMetaDataInVideoBuffers)
-#else
     if ((mFlags & kStoreMetaDataInVideoBuffers)
-#endif
             && portIndex == kPortIndexInput) {
         err = mOMX->storeMetaDataInBuffers(mNode, kPortIndexInput, OMX_TRUE);
         if (err != OK) {
@@ -1759,11 +1717,8 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
             mNativeWindow.get(),
             def.format.video.nFrameWidth,
             def.format.video.nFrameHeight,
-#ifdef STE_HARDWARE
-            OmxToHALFormat(def.format.video.eColorFormat));
-#else
             def.format.video.eColorFormat);
-#endif
+
     if (err != 0) {
         ALOGE("native_window_set_buffers_geometry failed: %s (%d)",
                 strerror(-err), -err);
