@@ -19,6 +19,7 @@
 
 #include <utils/KeyedVector.h>
 #include <utils/String8.h>
+#include "camera/CameraParametersExtra.h"
 
 namespace android {
 
@@ -594,13 +595,6 @@ public:
     static const char SCENE_MODE_SPORTS[];
     static const char SCENE_MODE_PARTY[];
     static const char SCENE_MODE_CANDLELIGHT[];
-#ifdef STE_SAMSUNG_HARDWARE
-    static const char SCENE_MODE_AQUA[];
-    static const char SCENE_MODE_BACKLIGHT[];
-    static const char SCENE_MODE_DUSKDAWN[];
-    static const char SCENE_MODE_FALLCOLOR[];
-    static const char SCENE_MODE_TEXT[];
-#endif
     // Applications are looking for a barcode. Camera driver will be optimized
     // for barcode reading.
     static const char SCENE_MODE_BARCODE[];
@@ -613,14 +607,6 @@ public:
     // and KEY_VIDEO_FRAME_FORMAT
     static const char PIXEL_FORMAT_YUV422SP[];
     static const char PIXEL_FORMAT_YUV420SP[]; // NV21
-#ifdef STE_HARDWARE
-    static const char PIXEL_FORMAT_YUV420SPNV12[]; // NV12
-    static const char PIXEL_FORMAT_YVU422SP[];
-    static const char PIXEL_FORMAT_YVU422P[];
-    static const char PIXEL_FORMAT_YVU420SP[];
-    static const char PIXEL_FORMAT_YVU420P[];
-    static const char PIXEL_FORMAT_YUV420MB[];
-#endif
     static const char PIXEL_FORMAT_YUV422I[]; // YUY2
     static const char PIXEL_FORMAT_YUV420P[]; // YV12
     static const char PIXEL_FORMAT_RGB565[];
@@ -689,10 +675,8 @@ public:
     // High-dynamic range mode
     static const char LIGHTFX_HDR[];
 
-#ifdef STE_HARDWARE
-    // keys for record stride and slice height
-    static const char KEY_RECORD_STRIDE[];
-    static const char KEY_RECORD_SLICE_HEIGHT[];
+#ifdef CAMERA_PARAMETERS_EXTRA_H
+CAMERA_PARAMETERS_EXTRA_H
 #endif
 
 private:

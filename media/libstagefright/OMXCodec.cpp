@@ -263,7 +263,8 @@ uint32_t OMXCodec::getComponentQuirks(
         quirks |= kOutputBuffersAreUnreadable;
     }
 #ifdef STE_HARDWARE
-    if (info->hasQuirk("requires-store-metadata-before-idle")) {
+    if (list->codecHasQuirk(
+                index, "requires-store-metadata-before-idle")) {
         quirks |= kRequiresStoreMetaDataBeforeIdle;
     }
 #endif
