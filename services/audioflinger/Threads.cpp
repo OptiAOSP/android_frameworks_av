@@ -84,6 +84,8 @@
 #define ALOGVV(a...) do { } while(0)
 #endif
 
+#define max(a, b) ((a) > (b) ? (a) : (b))
+
 namespace android {
 
 // retry counts for buffer fill timeout
@@ -168,7 +170,7 @@ static int sFastTrackMultiplier = kFastTrackMultiplier;
 // Initially this heap is used to allocate client buffers for "fast" AudioRecord.
 // Eventually it will be the single buffer that FastCapture writes into via HAL read(),
 // and that all "fast" AudioRecord clients read from.  In either case, the size can be small.
-static const size_t kRecordThreadReadOnlyHeapSize = 0x1000;
+static const size_t kRecordThreadReadOnlyHeapSize = 0x2000;
 
 // ----------------------------------------------------------------------------
 
@@ -660,12 +662,14 @@ void AudioFlinger::ThreadBase::acquireWakeLock_l(int uid)
                     binder,
                     getWakeLockTag(),
                     String16("media"),
-                    uid);
+                    uid,
+                    true /* FIXME force oneway contrary to .aidl */);
         } else {
             status = mPowerManager->acquireWakeLock(POWERMANAGER_PARTIAL_WAKE_LOCK,
                     binder,
                     getWakeLockTag(),
-                    String16("media"));
+                    String16("media"),
+                    true /* FIXME force oneway contrary to .aidl */);
         }
         if (status == NO_ERROR) {
             mWakeLockToken = binder;
@@ -685,7 +689,8 @@ void AudioFlinger::ThreadBase::releaseWakeLock_l()
     if (mWakeLockToken != 0) {
         ALOGV("releaseWakeLock_l() %s", mName);
         if (mPowerManager != 0) {
-            mPowerManager->releaseWakeLock(mWakeLockToken, 0);
+            mPowerManager->releaseWakeLock(mWakeLockToken, 0,
+                    true /* FIXME force oneway contrary to .aidl */);
         }
         mWakeLockToken.clear();
     }
@@ -721,7 +726,8 @@ void AudioFlinger::ThreadBase::updateWakeLockUids_l(const SortedVector<int> &uid
     if (mPowerManager != 0) {
         sp<IBinder> binder = new BBinder();
         status_t status;
-        status = mPowerManager->updateWakeLockUids(mWakeLockToken, uids.size(), uids.array());
+        status = mPowerManager->updateWakeLockUids(mWakeLockToken, uids.size(), uids.array(),
+                    true /* FIXME force oneway contrary to .aidl */);
         ALOGV("acquireWakeLock_l() %s status %d", mName, status);
     }
 }
@@ -907,6 +913,15 @@ sp<AudioFlinger::EffectHandle> AudioFlinger::ThreadBase::createEffect_l(
     if (mType == DIRECT) {
         ALOGW("createEffect_l() Cannot add effect %s on Direct output type thread %s",
                 desc->name, mName);
+        lStatus = BAD_VALUE;
+        goto Exit;
+    }
+
+    // Reject any effect on mixer or duplicating multichannel sinks.
+    // TODO: fix both format and multichannel issues with effects.
+    if ((mType == MIXER || mType == DUPLICATING) && mChannelCount != FCC_2) {
+        ALOGW("createEffect_l() Cannot add effect %s for multichannel(%d) %s threads",
+                desc->name, mChannelCount, mType == MIXER ? "MIXER" : "DUPLICATING");
         lStatus = BAD_VALUE;
         goto Exit;
     }
@@ -1147,6 +1162,18 @@ void AudioFlinger::ThreadBase::disconnectEffect(const sp<EffectModule>& effect,
     }
 }
 
+void AudioFlinger::ThreadBase::getAudioPortConfig(struct audio_port_config *config)
+{
+    config->type = AUDIO_PORT_TYPE_MIX;
+    config->ext.mix.handle = mId;
+    config->sample_rate = mSampleRate;
+    config->format = mFormat;
+    config->channel_mask = mChannelMask;
+    config->config_mask = AUDIO_PORT_CONFIG_SAMPLE_RATE|AUDIO_PORT_CONFIG_CHANNEL_MASK|
+                            AUDIO_PORT_CONFIG_FORMAT;
+}
+
+
 // ----------------------------------------------------------------------------
 //      Playback
 // ----------------------------------------------------------------------------
@@ -1377,9 +1404,10 @@ sp<AudioFlinger::PlaybackThread::Track> AudioFlinger::PlaybackThread::createTrac
             ) &&
             // PCM data
             audio_is_linear_pcm(format) &&
-            // mono or stereo
-            ( (channelMask == AUDIO_CHANNEL_OUT_MONO) ||
-              (channelMask == AUDIO_CHANNEL_OUT_STEREO) ) &&
+            // identical channel mask to sink, or mono in and stereo sink
+            (channelMask == mChannelMask ||
+                    (channelMask == AUDIO_CHANNEL_OUT_MONO &&
+                            mChannelMask == AUDIO_CHANNEL_OUT_STEREO)) &&
             // hardware sample rate
             (sampleRate == mSampleRate) &&
             // normal mixer has an associated fast mixer
@@ -1482,7 +1510,7 @@ sp<AudioFlinger::PlaybackThread::Track> AudioFlinger::PlaybackThread::createTrac
         uint32_t strategy = AudioSystem::getStrategyForStream(streamType);
         for (size_t i = 0; i < mTracks.size(); ++i) {
             sp<Track> t = mTracks[i];
-            if (t != 0 && !t->isOutputTrack()) {
+            if (t != 0 && t->isExternalTrack()) {
                 uint32_t actual = AudioSystem::getStrategyForStream(t->streamType());
                 if (sessionId == t->sessionId() && strategy != actual) {
                     ALOGE("createTrack_l() mismatched strategy; expected %u but found %u",
@@ -1495,7 +1523,8 @@ sp<AudioFlinger::PlaybackThread::Track> AudioFlinger::PlaybackThread::createTrac
 
         if (!isTimed) {
             track = new Track(this, client, streamType, sampleRate, format,
-                    channelMask, frameCount, sharedBuffer, sessionId, uid, *flags);
+                              channelMask, frameCount, NULL, sharedBuffer,
+                              sessionId, uid, *flags, TrackBase::TYPE_DEFAULT);
         } else {
             track = TimedTrack::create(this, client, streamType, sampleRate, format,
                     channelMask, frameCount, sharedBuffer, sessionId, uid);
@@ -1608,7 +1637,7 @@ status_t AudioFlinger::PlaybackThread::addTrack_l(const sp<Track>& track)
         // the track is newly added, make sure it fills up all its
         // buffers before playing. This is to ensure the client will
         // effectively get the latency it requested.
-        if (!track->isOutputTrack()) {
+        if (track->isExternalTrack()) {
             TrackBase::track_state state = track->mState;
             mLock.unlock();
             status = AudioSystem::startOutput(mId, track->streamType(), track->sessionId());
@@ -1801,9 +1830,10 @@ void AudioFlinger::PlaybackThread::readOutputParameters_l()
     if (!audio_is_output_channel(mChannelMask)) {
         LOG_ALWAYS_FATAL("HAL channel mask %#x not valid for output", mChannelMask);
     }
-    if ((mType == MIXER || mType == DUPLICATING) && mChannelMask != AUDIO_CHANNEL_OUT_STEREO) {
-        LOG_ALWAYS_FATAL("HAL channel mask %#x not supported for mixed output; "
-                "must be AUDIO_CHANNEL_OUT_STEREO", mChannelMask);
+    if ((mType == MIXER || mType == DUPLICATING)
+            && !isValidPcmSinkChannelMask(mChannelMask)) {
+        LOG_ALWAYS_FATAL("HAL channel mask %#x not supported for mixed output",
+                mChannelMask);
     }
     mChannelCount = audio_channel_count_from_out_mask(mChannelMask);
     mHALFormat = mOutput->stream->common.get_format(&mOutput->stream->common);
@@ -2044,7 +2074,7 @@ void AudioFlinger::PlaybackThread::threadLoop_removeTracks(
     if (count > 0) {
         for (size_t i = 0 ; i < count ; i++) {
             const sp<Track>& track = tracksToRemove.itemAt(i);
-            if (!track->isOutputTrack()) {
+            if (track->isExternalTrack()) {
                 AudioSystem::stopOutput(mId, track->streamType(), track->sessionId());
 #ifdef ADD_BATTERY_DATA
                 // to track the speaker usage
@@ -2615,12 +2645,9 @@ bool AudioFlinger::PlaybackThread::threadLoop()
 
     threadLoop_exit();
 
-    // for DuplicatingThread, standby mode is handled by the outputTracks, otherwise ...
-    if (mType == MIXER || mType == DIRECT || mType == OFFLOAD) {
-        // put output stream into standby mode
-        if (!mStandby) {
-            mOutput->stream->common.standby(&mOutput->stream->common);
-        }
+    if (!mStandby) {
+        threadLoop_standby();
+        mStandby = true;
     }
 
     releaseWakeLock();
@@ -2713,6 +2740,26 @@ status_t AudioFlinger::PlaybackThread::releaseAudioPatch_l(const audio_patch_han
     return status;
 }
 
+void AudioFlinger::PlaybackThread::addPatchTrack(const sp<PatchTrack>& track)
+{
+    Mutex::Autolock _l(mLock);
+    mTracks.add(track);
+}
+
+void AudioFlinger::PlaybackThread::deletePatchTrack(const sp<PatchTrack>& track)
+{
+    Mutex::Autolock _l(mLock);
+    destroyTrack_l(track);
+}
+
+void AudioFlinger::PlaybackThread::getAudioPortConfig(struct audio_port_config *config)
+{
+    ThreadBase::getAudioPortConfig(config);
+    config->role = AUDIO_PORT_ROLE_SOURCE;
+    config->ext.mix.hw_module = mOutput->audioHwDev->handle();
+    config->ext.mix.usecase.stream = AUDIO_STREAM_DEFAULT;
+}
+
 // ----------------------------------------------------------------------------
 
 AudioFlinger::MixerThread::MixerThread(const sp<AudioFlinger>& audioFlinger, AudioStreamOut* output,
@@ -2731,11 +2778,6 @@ AudioFlinger::MixerThread::MixerThread(const sp<AudioFlinger>& audioFlinger, Aud
             mSampleRate, mChannelMask, mChannelCount, mFormat, mFrameSize, mFrameCount,
             mNormalFrameCount);
     mAudioMixer = new AudioMixer(mNormalFrameCount, mSampleRate);
-
-    // FIXME - Current mixer implementation only supports stereo output
-    if (mChannelCount != FCC_2) {
-        ALOGE("Invalid audio hardware channel count %d", mChannelCount);
-    }
 
     // create an NBAIO sink for the HAL output stream, and negotiate
     mOutputSink = new AudioStreamOutSink(output->stream);
@@ -3459,6 +3501,10 @@ AudioFlinger::PlaybackThread::mixer_state AudioFlinger::MixerThread::prepareTrac
                 name,
                 AudioMixer::TRACK,
                 AudioMixer::CHANNEL_MASK, (void *)(uintptr_t)track->channelMask());
+            mAudioMixer->setParameter(
+                name,
+                AudioMixer::TRACK,
+                AudioMixer::MIXER_CHANNEL_MASK, (void *)(uintptr_t)mChannelMask);
             // limit track sample rate to 2 x output sample rate, which changes at re-configuration
             uint32_t maxSampleRate = mSampleRate * AUDIO_RESAMPLER_DOWN_RATIO_MAX;
             uint32_t reqSampleRate = track->mAudioTrackServerProxy->getSampleRate();
@@ -3620,6 +3666,10 @@ track_is_ready: ;
     // remove all the tracks that need to be...
     removeTracks_l(*tracksToRemove);
 
+    if (getEffectChain_l(AUDIO_SESSION_OUTPUT_MIX) != 0) {
+        mEffectBufferValid = true;
+    }
+
     // sink or mix buffer must be cleared if all tracks are connected to an
     // effect chain as in this case the mixer will not write to the sink or mix buffer
     // and track effects will accumulate into it
@@ -3697,7 +3747,7 @@ bool AudioFlinger::MixerThread::checkForNewParameter_l(const String8& keyValuePa
         reconfig = true;
     }
     if (param.getInt(String8(AudioParameter::keyFormat), value) == NO_ERROR) {
-        if ((audio_format_t) value != AUDIO_FORMAT_PCM_16_BIT) {
+        if (!isValidPcmSinkFormat((audio_format_t) value)) {
             status = BAD_VALUE;
         } else {
             // no need to save value, since it's constant
@@ -3705,7 +3755,7 @@ bool AudioFlinger::MixerThread::checkForNewParameter_l(const String8& keyValuePa
         }
     }
     if (param.getInt(String8(AudioParameter::keyChannels), value) == NO_ERROR) {
-        if ((audio_channel_mask_t) value != AUDIO_CHANNEL_OUT_STEREO) {
+        if (!isValidPcmSinkChannelMask((audio_channel_mask_t) value)) {
             status = BAD_VALUE;
         } else {
             // no need to save value, since it's constant
@@ -4819,8 +4869,8 @@ AudioFlinger::RecordThread::RecordThread(const sp<AudioFlinger>& audioFlinger,
                 // or primary output sample rate is unknown, and capture sample rate is reasonable
                 ((primaryOutputSampleRate == 0) &&
                     ((mSampleRate == 44100 || mSampleRate == 48000)))) &&
-                // and the buffer size is < 10 ms
-                (mFrameCount * 1000) / mSampleRate < 10;
+                // and the buffer size is < 12 ms
+                (mFrameCount * 1000) / mSampleRate < 12;
         break;
     // case FastCapture_Dynamic:
     }
@@ -4828,7 +4878,7 @@ AudioFlinger::RecordThread::RecordThread(const sp<AudioFlinger>& audioFlinger,
     if (initFastCapture) {
         // create a Pipe for FastMixer to write to, and for us and fast tracks to read from
         NBAIO_Format format = mInputSource->format();
-        size_t pipeFramesP2 = roundup(mFrameCount * 8);
+        size_t pipeFramesP2 = roundup(mSampleRate / 25);    // double-buffering of 20 ms each
         size_t pipeSize = pipeFramesP2 * Format_frameSize(format);
         void *pipeBuffer;
         const sp<MemoryDealer> roHeap(readOnlyHeap());
@@ -4975,8 +5025,11 @@ reacquire_wakelock:
         // activeTracks accumulates a copy of a subset of mActiveTracks
         Vector< sp<RecordTrack> > activeTracks;
 
-        // reference to the (first and only) fast track
+        // reference to the (first and only) active fast track
         sp<RecordTrack> fastTrack;
+
+        // reference to a fast track which is about to be removed
+        sp<RecordTrack> fastTrackToRemove;
 
         { // scope for mLock
             Mutex::Autolock _l(mLock);
@@ -5016,6 +5069,10 @@ reacquire_wakelock:
 
                 activeTrack = mActiveTracks[i];
                 if (activeTrack->isTerminated()) {
+                    if (activeTrack->isFastTrack()) {
+                        ALOG_ASSERT(fastTrackToRemove == 0);
+                        fastTrackToRemove = activeTrack;
+                    }
                     removeTrack_l(activeTrack);
                     mActiveTracks.remove(activeTrack);
                     mActiveTracksGen++;
@@ -5088,10 +5145,12 @@ reacquire_wakelock:
             effectChains[i]->process_l();
         }
 
-        // Start the fast capture if it's not already running
+        // Push a new fast capture state if fast capture is not already running, or cblk change
         if (mFastCapture != 0) {
             FastCaptureStateQueue *sq = mFastCapture->sq();
             FastCaptureState *state = sq->begin();
+            bool didModify = false;
+            FastCaptureStateQueue::block_t block = FastCaptureStateQueue::BLOCK_UNTIL_PUSHED;
             if (state->mCommand != FastCaptureState::READ_WRITE /* FIXME &&
                     (kUseFastMixer != FastMixer_Dynamic || state->mTrackMask > 1)*/) {
                 if (state->mCommand == FastCaptureState::COLD_IDLE) {
@@ -5105,18 +5164,31 @@ reacquire_wakelock:
                 mFastCaptureDumpState.increaseSamplingN(mAudioFlinger->isLowRamDevice() ?
                         FastCaptureDumpState::kSamplingNforLowRamDevice : FastMixerDumpState::kSamplingN);
 #endif
-                state->mCblk = fastTrack != 0 ? fastTrack->cblk() : NULL;
-                sq->end();
-                sq->push(FastCaptureStateQueue::BLOCK_UNTIL_PUSHED);
+                didModify = true;
+            }
+            audio_track_cblk_t *cblkOld = state->mCblk;
+            audio_track_cblk_t *cblkNew = fastTrack != 0 ? fastTrack->cblk() : NULL;
+            if (cblkNew != cblkOld) {
+                state->mCblk = cblkNew;
+                // block until acked if removing a fast track
+                if (cblkOld != NULL) {
+                    block = FastCaptureStateQueue::BLOCK_UNTIL_ACKED;
+                }
+                didModify = true;
+            }
+            sq->end(didModify);
+            if (didModify) {
+                sq->push(block);
 #if 0
                 if (kUseFastCapture == FastCapture_Dynamic) {
                     mNormalSource = mPipeSource;
                 }
 #endif
-            } else {
-                sq->end(false /*didModify*/);
             }
         }
+
+        // now run the fast track destructor with thread mutex unlocked
+        fastTrackToRemove.clear();
 
         // Read from HAL to keep up with fastest client if multiple active tracks, not slowest one.
         // Only the client(s) that are too slow will overrun. But if even the fastest client is too
@@ -5254,11 +5326,13 @@ reacquire_wakelock:
                     //       to keep mRsmpInBuffer full so resampler always has sufficient input
                     size_t framesInNeeded;
                     // FIXME only re-calculate when it changes, and optimize for common ratios
-                    double inOverOut = (double) mSampleRate / activeTrack->mSampleRate;
-                    double outOverIn = (double) activeTrack->mSampleRate / mSampleRate;
-                    framesInNeeded = ceil(framesOut * inOverOut) + 1;
+                    // Do not precompute in/out because floating point is not associative
+                    // e.g. a*b/c != a*(b/c).
+                    const double in(mSampleRate);
+                    const double out(activeTrack->mSampleRate);
+                    framesInNeeded = ceil(framesOut * in / out) + 1;
                     ALOGV("need %u frames in to produce %u out given in/out ratio of %.4g",
-                                framesInNeeded, framesOut, inOverOut);
+                                framesInNeeded, framesOut, in / out);
                     // Although we theoretically have framesIn in circular buffer, some of those are
                     // unreleased frames, and thus must be discounted for purpose of budgeting.
                     size_t unreleased = activeTrack->mRsmpInUnrel;
@@ -5266,24 +5340,24 @@ reacquire_wakelock:
                     if (framesIn < framesInNeeded) {
                         ALOGV("not enough to resample: have %u frames in but need %u in to "
                                 "produce %u out given in/out ratio of %.4g",
-                                framesIn, framesInNeeded, framesOut, inOverOut);
-                        size_t newFramesOut = framesIn > 0 ? floor((framesIn - 1) * outOverIn) : 0;
+                                framesIn, framesInNeeded, framesOut, in / out);
+                        size_t newFramesOut = framesIn > 0 ? floor((framesIn - 1) * out / in) : 0;
                         LOG_ALWAYS_FATAL_IF(newFramesOut >= framesOut);
                         if (newFramesOut == 0) {
                             break;
                         }
-                        framesInNeeded = ceil(newFramesOut * inOverOut) + 1;
+                        framesInNeeded = ceil(newFramesOut * in / out) + 1;
                         ALOGV("now need %u frames in to produce %u out given out/in ratio of %.4g",
-                                framesInNeeded, newFramesOut, outOverIn);
+                                framesInNeeded, newFramesOut, out / in);
                         LOG_ALWAYS_FATAL_IF(framesIn < framesInNeeded);
                         ALOGV("success 2: have %u frames in and need %u in to produce %u out "
                               "given in/out ratio of %.4g",
-                              framesIn, framesInNeeded, newFramesOut, inOverOut);
+                              framesIn, framesInNeeded, newFramesOut, in / out);
                         framesOut = newFramesOut;
                     } else {
                         ALOGV("success 1: have %u in and need %u in to produce %u out "
                             "given in/out ratio of %.4g",
-                            framesIn, framesInNeeded, framesOut, inOverOut);
+                            framesIn, framesInNeeded, framesOut, in / out);
                     }
 
                     // reallocate mRsmpOutBuffer as needed; we will grow but never shrink
@@ -5495,20 +5569,25 @@ sp<AudioFlinger::RecordThread::RecordTrack> AudioFlinger::RecordThread::createRe
         // ignore requested notificationFrames, and always notify exactly once every HAL buffer
         *notificationFrames = mFrameCount;
     } else {
-        // not fast track: frame count is at least 2 HAL buffers and at least 20 ms
-        size_t minFrameCount = ((int64_t) mFrameCount * 2 * sampleRate + mSampleRate - 1) /
-                mSampleRate;
-        if (frameCount < minFrameCount) {
-            frameCount = minFrameCount;
-        }
-        minFrameCount = (sampleRate * 20 / 1000 + 1) & ~1;
-        if (frameCount < minFrameCount) {
-            frameCount = minFrameCount;
-        }
-        // notification is forced to be at least double-buffering
-        size_t maxNotification = frameCount / 2;
-        if (*notificationFrames == 0 || *notificationFrames > maxNotification) {
-            *notificationFrames = maxNotification;
+        // not fast track: max notification period is resampled equivalent of one HAL buffer time
+        //                 or 20 ms if there is a fast capture
+        // TODO This could be a roundupRatio inline, and const
+        size_t maxNotificationFrames = ((int64_t) (hasFastCapture() ? mSampleRate/50 : mFrameCount)
+                * sampleRate + mSampleRate - 1) / mSampleRate;
+        // minimum number of notification periods is at least kMinNotifications,
+        // and at least kMinMs rounded up to a whole notification period (minNotificationsByMs)
+        static const size_t kMinNotifications = 3;
+        static const uint32_t kMinMs = 30;
+        // TODO This could be a roundupRatio inline
+        const size_t minFramesByMs = (sampleRate * kMinMs + 1000 - 1) / 1000;
+        // TODO This could be a roundupRatio inline
+        const size_t minNotificationsByMs = (minFramesByMs + maxNotificationFrames - 1) /
+                maxNotificationFrames;
+        const size_t minFrameCount = maxNotificationFrames *
+                max(kMinNotifications, minNotificationsByMs);
+        frameCount = max(frameCount, minFrameCount);
+        if (*notificationFrames == 0 || *notificationFrames > maxNotificationFrames) {
+            *notificationFrames = maxNotificationFrames;
         }
     }
     *pFrameCount = frameCount;
@@ -5523,8 +5602,8 @@ sp<AudioFlinger::RecordThread::RecordTrack> AudioFlinger::RecordThread::createRe
         Mutex::Autolock _l(mLock);
 
         track = new RecordTrack(this, client, sampleRate,
-                      format, channelMask, frameCount, sessionId, uid,
-                      *flags);
+                      format, channelMask, frameCount, NULL, sessionId, uid,
+                      *flags, TrackBase::TYPE_DEFAULT);
 
         lStatus = track->initCheck();
         if (lStatus != NO_ERROR) {
@@ -5601,15 +5680,19 @@ status_t AudioFlinger::RecordThread::start(RecordThread::RecordTrack* recordTrac
         recordTrack->mState = TrackBase::STARTING_1;
         mActiveTracks.add(recordTrack);
         mActiveTracksGen++;
-        mLock.unlock();
-        status_t status = AudioSystem::startInput(mId);
-        mLock.lock();
-        // FIXME should verify that recordTrack is still in mActiveTracks
-        if (status != NO_ERROR) {
-            mActiveTracks.remove(recordTrack);
-            mActiveTracksGen++;
-            recordTrack->clearSyncStartEvent();
-            return status;
+        status_t status = NO_ERROR;
+        if (recordTrack->isExternalTrack()) {
+            mLock.unlock();
+            status = AudioSystem::startInput(mId, (audio_session_t)recordTrack->sessionId());
+            mLock.lock();
+            // FIXME should verify that recordTrack is still in mActiveTracks
+            if (status != NO_ERROR) {
+                mActiveTracks.remove(recordTrack);
+                mActiveTracksGen++;
+                recordTrack->clearSyncStartEvent();
+                ALOGV("RecordThread::start error %d", status);
+                return status;
+            }
         }
         // Catch up with current buffer indices if thread is already running.
         // This is what makes a new client discard all buffered data.  If the track's mRsmpInFront
@@ -5634,7 +5717,9 @@ status_t AudioFlinger::RecordThread::start(RecordThread::RecordTrack* recordTrac
     }
 
 startError:
-    AudioSystem::stopInput(mId);
+    if (recordTrack->isExternalTrack()) {
+        AudioSystem::stopInput(mId, (audio_session_t)recordTrack->sessionId());
+    }
     recordTrack->clearSyncStartEvent();
     // FIXME I wonder why we do not reset the state here?
     return status;
@@ -6025,6 +6110,14 @@ void AudioFlinger::RecordThread::readInputParameters_l()
     mRsmpInFrames = mFrameCount * 7;
     mRsmpInFramesP2 = roundup(mRsmpInFrames);
     delete[] mRsmpInBuffer;
+
+    // TODO optimize audio capture buffer sizes ...
+    // Here we calculate the size of the sliding buffer used as a source
+    // for resampling.  mRsmpInFramesP2 is currently roundup(mFrameCount * 7).
+    // For current HAL frame counts, this is usually 2048 = 40 ms.  It would
+    // be better to have it derived from the pipe depth in the long term.
+    // The current value is higher than necessary.  However it should not add to latency.
+
     // Over-allocate beyond mRsmpInFramesP2 to permit a HAL read past end of buffer
     mRsmpInBuffer = new int16_t[(mRsmpInFramesP2 + mFrameCount - 1) * mChannelCount];
 
@@ -6177,5 +6270,24 @@ status_t AudioFlinger::RecordThread::releaseAudioPatch_l(const audio_patch_handl
     return status;
 }
 
+void AudioFlinger::RecordThread::addPatchRecord(const sp<PatchRecord>& record)
+{
+    Mutex::Autolock _l(mLock);
+    mTracks.add(record);
+}
+
+void AudioFlinger::RecordThread::deletePatchRecord(const sp<PatchRecord>& record)
+{
+    Mutex::Autolock _l(mLock);
+    destroyTrack_l(record);
+}
+
+void AudioFlinger::RecordThread::getAudioPortConfig(struct audio_port_config *config)
+{
+    ThreadBase::getAudioPortConfig(config);
+    config->role = AUDIO_PORT_ROLE_SINK;
+    config->ext.mix.hw_module = mInput->audioHwDev->handle();
+    config->ext.mix.usecase.source = mAudioSource;
+}
 
 }; // namespace android

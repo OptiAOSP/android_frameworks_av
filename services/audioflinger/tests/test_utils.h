@@ -120,7 +120,7 @@ public:
         }
         if (!mInputIncr.empty()) {
             size_t provided = mInputIncr[mNextIdx++];
-            ALOGV("getNextBuffer() mValue[%d]=%u not %u",
+            ALOGV("getNextBuffer() mValue[%zu]=%zu not %zu",
                     mNextIdx-1, provided, buffer->frameCount);
             if (provided < buffer->frameCount) {
                 buffer->frameCount = provided;
@@ -129,8 +129,8 @@ public:
                 mNextIdx = 0;
             }
         }
-        ALOGV("getNextBuffer() requested %u frames out of %u frames available"
-                " and returned %u frames\n",
+        ALOGV("getNextBuffer() requested %zu frames out of %zu frames available"
+                " and returned %zu frames",
                 requestedFrames, mNumFrames - mNextFrame, buffer->frameCount);
         mUnrel = buffer->frameCount;
         if (buffer->frameCount > 0) {
@@ -145,14 +145,14 @@ public:
     virtual void releaseBuffer(Buffer* buffer)
     {
         if (buffer->frameCount > mUnrel) {
-            ALOGE("releaseBuffer() released %u frames but only %u available "
-                    "to release\n", buffer->frameCount, mUnrel);
+            ALOGE("releaseBuffer() released %zu frames but only %zu available "
+                    "to release", buffer->frameCount, mUnrel);
             mNextFrame += mUnrel;
             mUnrel = 0;
         } else {
 
-            ALOGV("releaseBuffer() released %u frames out of %u frames available "
-                    "to release\n", buffer->frameCount, mUnrel);
+            ALOGV("releaseBuffer() released %zu frames out of %zu frames available "
+                    "to release", buffer->frameCount, mUnrel);
             mNextFrame += buffer->frameCount;
             mUnrel -= buffer->frameCount;
         }
@@ -195,7 +195,7 @@ static void createSine(void *vbuffer, size_t frames,
         T yt = convertValue<T>(y);
 
         for (size_t j = 0; j < channels; ++j) {
-            buffer[i*channels + j] = yt / (j + 1);
+            buffer[i*channels + j] = yt / T(j + 1);
         }
     }
 }
@@ -221,7 +221,7 @@ static void createChirp(void *vbuffer, size_t frames,
         T yt = convertValue<T>(y);
 
         for (size_t j = 0; j < channels; ++j) {
-            buffer[i*channels + j] = yt / (j + 1);
+            buffer[i*channels + j] = yt / T(j + 1);
         }
     }
 }

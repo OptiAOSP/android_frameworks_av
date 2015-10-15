@@ -145,26 +145,26 @@ public:
     virtual size_t getInputBufferSize(uint32_t sampleRate, audio_format_t format,
             audio_channel_mask_t channelMask) const = 0;
 
-    virtual audio_io_handle_t openOutput(audio_module_handle_t module,
-                                         audio_devices_t *pDevices,
-                                         uint32_t *pSamplingRate,
-                                         audio_format_t *pFormat,
-                                         audio_channel_mask_t *pChannelMask,
-                                         uint32_t *pLatencyMs,
-                                         audio_output_flags_t flags,
-                                         const audio_offload_info_t *offloadInfo = NULL) = 0;
+    virtual status_t openOutput(audio_module_handle_t module,
+                                audio_io_handle_t *output,
+                                audio_config_t *config,
+                                audio_devices_t *devices,
+                                const String8& address,
+                                uint32_t *latencyMs,
+                                audio_output_flags_t flags) = 0;
     virtual audio_io_handle_t openDuplicateOutput(audio_io_handle_t output1,
                                     audio_io_handle_t output2) = 0;
     virtual status_t closeOutput(audio_io_handle_t output) = 0;
     virtual status_t suspendOutput(audio_io_handle_t output) = 0;
     virtual status_t restoreOutput(audio_io_handle_t output) = 0;
 
-    virtual audio_io_handle_t openInput(audio_module_handle_t module,
-                                        audio_devices_t *pDevices,
-                                        uint32_t *pSamplingRate,
-                                        audio_format_t *pFormat,
-                                        audio_channel_mask_t *pChannelMask,
-                                        audio_input_flags_t flags) = 0;
+    virtual status_t openInput(audio_module_handle_t module,
+                               audio_io_handle_t *input,
+                               audio_config_t *config,
+                               audio_devices_t *device,
+                               const String8& address,
+                               audio_source_t source,
+                               audio_input_flags_t flags) = 0;
     virtual status_t closeInput(audio_io_handle_t input) = 0;
 
     virtual status_t invalidateStream(audio_stream_type_t stream) = 0;
@@ -176,7 +176,7 @@ public:
 
     virtual uint32_t getInputFramesLost(audio_io_handle_t ioHandle) const = 0;
 
-    virtual int newAudioSessionId() = 0;
+    virtual audio_unique_id_t newAudioUniqueId() = 0;
 
     virtual void acquireAudioSessionId(int audioSession, pid_t pid) = 0;
     virtual void releaseAudioSessionId(int audioSession, pid_t pid) = 0;
@@ -235,6 +235,8 @@ public:
     /* Set audio port configuration */
     virtual status_t setAudioPortConfig(const struct audio_port_config *config) = 0;
 
+    /* Get the HW synchronization source used for an audio session */
+    virtual audio_hw_sync_t getAudioHwSyncForSession(audio_session_t sessionId) = 0;
 };
 
 

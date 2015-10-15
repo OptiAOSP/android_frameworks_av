@@ -55,6 +55,7 @@
 #include "FastMixer.h"
 #include <media/nbaio/NBAIO.h>
 #include "AudioWatchdog.h"
+#include "AudioMixer.h"
 
 #include <powermanager/IPowerManager.h>
 
@@ -157,14 +158,13 @@ public:
     virtual     size_t      getInputBufferSize(uint32_t sampleRate, audio_format_t format,
                                                audio_channel_mask_t channelMask) const;
 
-    virtual audio_io_handle_t openOutput(audio_module_handle_t module,
-                                         audio_devices_t *pDevices,
-                                         uint32_t *pSamplingRate,
-                                         audio_format_t *pFormat,
-                                         audio_channel_mask_t *pChannelMask,
-                                         uint32_t *pLatencyMs,
-                                         audio_output_flags_t flags,
-                                         const audio_offload_info_t *offloadInfo);
+    virtual status_t openOutput(audio_module_handle_t module,
+                                audio_io_handle_t *output,
+                                audio_config_t *config,
+                                audio_devices_t *devices,
+                                const String8& address,
+                                uint32_t *latencyMs,
+                                audio_output_flags_t flags);
 
     virtual audio_io_handle_t openDuplicateOutput(audio_io_handle_t output1,
                                                   audio_io_handle_t output2);
@@ -175,12 +175,13 @@ public:
 
     virtual status_t restoreOutput(audio_io_handle_t output);
 
-    virtual audio_io_handle_t openInput(audio_module_handle_t module,
-                                        audio_devices_t *pDevices,
-                                        uint32_t *pSamplingRate,
-                                        audio_format_t *pFormat,
-                                        audio_channel_mask_t *pChannelMask,
-                                        audio_input_flags_t flags);
+    virtual status_t openInput(audio_module_handle_t module,
+                               audio_io_handle_t *input,
+                               audio_config_t *config,
+                               audio_devices_t *device,
+                               const String8& address,
+                               audio_source_t source,
+                               audio_input_flags_t flags);
 
     virtual status_t closeInput(audio_io_handle_t input);
 
@@ -193,7 +194,7 @@ public:
 
     virtual uint32_t getInputFramesLost(audio_io_handle_t ioHandle) const;
 
-    virtual int newAudioSessionId();
+    virtual audio_unique_id_t newAudioUniqueId();
 
     virtual void acquireAudioSessionId(int audioSession, pid_t pid);
 
@@ -246,6 +247,9 @@ public:
 
     /* Set audio port configuration */
     virtual status_t setAudioPortConfig(const struct audio_port_config *config);
+
+    /* Get the HW synchronization source used for an audio session */
+    virtual audio_hw_sync_t getAudioHwSyncForSession(audio_session_t sessionId);
 
     virtual     status_t    onTransact(
                                 uint32_t code,
@@ -326,6 +330,31 @@ private:
     AudioHwDevice*          findSuitableHwDev_l(audio_module_handle_t module,
                                                 audio_devices_t devices);
     void                    purgeStaleEffects_l();
+
+    // Set kEnableExtendedChannels to true to enable greater than stereo output
+    // for the MixerThread and device sink.  Number of channels allowed is
+    // FCC_2 <= channels <= AudioMixer::MAX_NUM_CHANNELS.
+    static const bool kEnableExtendedChannels = true;
+
+    // Returns true if channel mask is permitted for the PCM sink in the MixerThread
+    static inline bool isValidPcmSinkChannelMask(audio_channel_mask_t channelMask) {
+        switch (audio_channel_mask_get_representation(channelMask)) {
+        case AUDIO_CHANNEL_REPRESENTATION_POSITION: {
+            uint32_t channelCount = FCC_2; // stereo is default
+            if (kEnableExtendedChannels) {
+                channelCount = audio_channel_count_from_out_mask(channelMask);
+                if (channelCount < FCC_2 // mono is not supported at this time
+                        || channelCount > AudioMixer::MAX_NUM_CHANNELS) {
+                    return false;
+                }
+            }
+            // check that channelMask is the "canonical" one we expect for the channelCount.
+            return channelMask == audio_channel_out_mask_from_count(channelCount);
+            }
+        default:
+            return false;
+        }
+    }
 
     // Set kEnableExtendedPrecision to true to use extended precision in MixerThread
     static const bool kEnableExtendedPrecision = true;
@@ -489,6 +518,23 @@ private:
               PlaybackThread *checkPlaybackThread_l(audio_io_handle_t output) const;
               MixerThread *checkMixerThread_l(audio_io_handle_t output) const;
               RecordThread *checkRecordThread_l(audio_io_handle_t input) const;
+              sp<RecordThread> openInput_l(audio_module_handle_t module,
+                                           audio_io_handle_t *input,
+                                           audio_config_t *config,
+                                           audio_devices_t device,
+                                           const String8& address,
+                                           audio_source_t source,
+                                           audio_input_flags_t flags);
+              sp<PlaybackThread> openOutput_l(audio_module_handle_t module,
+                                              audio_io_handle_t *output,
+                                              audio_config_t *config,
+                                              audio_devices_t devices,
+                                              const String8& address,
+                                              audio_output_flags_t flags);
+
+              void closeOutputFinish(sp<PlaybackThread> thread);
+              void closeInputFinish(sp<RecordThread> thread);
+
               // no range check, AudioFlinger::mLock held
               bool streamMute_l(audio_stream_type_t stream) const
                                 { return mStreamTypes[stream].mute; }
@@ -530,10 +576,11 @@ private:
             AHWD_CAN_SET_MASTER_MUTE    = 0x2,
         };
 
-        AudioHwDevice(const char *moduleName,
+        AudioHwDevice(audio_module_handle_t handle,
+                      const char *moduleName,
                       audio_hw_device_t *hwDevice,
                       Flags flags)
-            : mModuleName(strdup(moduleName))
+            : mHandle(handle), mModuleName(strdup(moduleName))
             , mHwDevice(hwDevice)
             , mFlags(flags) { }
         /*virtual*/ ~AudioHwDevice() { free((void *)mModuleName); }
@@ -546,11 +593,13 @@ private:
             return (0 != (mFlags & AHWD_CAN_SET_MASTER_MUTE));
         }
 
+        audio_module_handle_t handle() const { return mHandle; }
         const char *moduleName() const { return mModuleName; }
         audio_hw_device_t *hwDevice() const { return mHwDevice; }
         uint32_t version() const { return mHwDevice->common.version; }
 
     private:
+        const audio_module_handle_t mHandle;
         const char * const mModuleName;
         audio_hw_device_t * const mHwDevice;
         const Flags mFlags;
@@ -669,7 +718,9 @@ private:
 
     // for use from destructor
     status_t    closeOutput_nonvirtual(audio_io_handle_t output);
+    void        closeOutputInternal_l(sp<PlaybackThread> thread);
     status_t    closeInput_nonvirtual(audio_io_handle_t input);
+    void        closeInputInternal_l(sp<RecordThread> thread);
 
 #ifdef TEE_SINK
     // all record threads serially share a common tee sink, which is re-created on format change
