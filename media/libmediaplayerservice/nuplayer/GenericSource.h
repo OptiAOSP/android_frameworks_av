@@ -51,8 +51,6 @@ struct NuPlayer::GenericSource : public NuPlayer::Source {
 
     virtual void start();
 
-    virtual void disconnect();
-
     virtual status_t feedMoreTSData();
 
     virtual status_t dequeueAccessUnit(bool audio, sp<ABuffer> *accessUnit);

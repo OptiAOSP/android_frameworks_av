@@ -194,14 +194,6 @@ void NuPlayer::GenericSource::start() {
 
         readBuffer(MEDIA_TRACK_TYPE_VIDEO);
     }
-
-void NuPlayer::GenericSource::disconnect() {
-    if (mDataSource != NULL) {
-        // disconnect data source
-        if (mDataSource->flags() & DataSource::kIsCachingDataSource) {
-            static_cast<NuCachedSource2 *>(mDataSource.get())->disconnect();
-        }
-    }
 }
 
 status_t NuPlayer::GenericSource::feedMoreTSData() {
