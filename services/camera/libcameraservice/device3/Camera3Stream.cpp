@@ -209,6 +209,34 @@ status_t Camera3Stream::finishConfiguration(camera3_device *hal3Device) {
     return res;
 }
 
+status_t Camera3Stream::cancelConfiguration() {
+    ATRACE_CALL();
+    Mutex::Autolock l(mLock);
+    switch (mState) {
+        case STATE_ERROR:
+            ALOGE("%s: In error state", __FUNCTION__);
+            return INVALID_OPERATION;
+        case STATE_IN_CONFIG:
+        case STATE_IN_RECONFIG:
+            // OK
+            break;
+        case STATE_CONSTRUCTED:
+        case STATE_CONFIGURED:
+            ALOGE("%s: Cannot cancel configuration that hasn't been started",
+                    __FUNCTION__);
+            return INVALID_OPERATION;
+        default:
+            ALOGE("%s: Unknown state", __FUNCTION__);
+            return INVALID_OPERATION;
+    }
+
+    camera3_stream::usage = oldUsage;
+    camera3_stream::max_buffers = oldMaxBuffers;
+
+    mState = (mState == STATE_IN_RECONFIG) ? STATE_CONFIGURED : STATE_CONSTRUCTED;
+    return OK;
+}
+
 status_t Camera3Stream::getBuffer(camera3_stream_buffer *buffer) {
     ATRACE_CALL();
     Mutex::Autolock l(mLock);
@@ -381,18 +409,7 @@ status_t Camera3Stream::registerBuffersLocked(camera3_device *hal3Device) {
     if (hal3Device->common.version >= CAMERA_DEVICE_API_VERSION_3_2) {
         ALOGV("%s: register_stream_buffers unused as of HAL3.2", __FUNCTION__);
 
-        /**
-         * Skip the NULL check if camera.dev.register_stream is 1.
-         *
-         * For development-validation purposes only.
-         *
-         * TODO: Remove the property check before shipping L (b/13914251).
-         */
-        char value[PROPERTY_VALUE_MAX] = { '\0', };
-        property_get("camera.dev.register_stream", value, "0");
-        int propInt = atoi(value);
-
-        if (propInt == 0 && hal3Device->ops->register_stream_buffers != NULL) {
+        if (hal3Device->ops->register_stream_buffers != NULL) {
             ALOGE("%s: register_stream_buffers is deprecated in HAL3.2; "
                     "must be set to NULL in camera3_device::ops", __FUNCTION__);
             return INVALID_OPERATION;
