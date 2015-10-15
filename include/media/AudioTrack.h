@@ -430,7 +430,7 @@ public:
      *  - NO_ERROR: successful operation
      *  - BAD_VALUE:  position is NULL
      */
-            status_t    getPosition(uint32_t *position) const;
+            status_t    getPosition(uint32_t *position);
 
     /* For static buffer mode only, this returns the current playback position in frames
      * relative to start of buffer.  It is analogous to the position units used by
@@ -580,7 +580,15 @@ public:
      * Caution: calling this method too often may be inefficient;
      * if you need a high resolution mapping between frame position and presentation time,
      * consider implementing that at application level, based on the low resolution timestamps.
-     * Returns NO_ERROR if timestamp is valid.
+     * Returns NO_ERROR    if timestamp is valid.
+     *         WOULD_BLOCK if called in STOPPED or FLUSHED state, or if called immediately after
+     *                     start/ACTIVE, when the number of frames consumed is less than the
+     *                     overall hardware latency to physical output. In WOULD_BLOCK cases,
+     *                     one might poll again, or use getPosition(), or use 0 position and
+     *                     current time for the timestamp.
+     *         INVALID_OPERATION  if called on a FastTrack, wrong state, or some other error.
+     *
+     * The timestamp parameter is undefined on return, if status is not NO_ERROR.
      */
             status_t    getTimestamp(AudioTimestamp& timestamp);
 
@@ -639,7 +647,7 @@ protected:
 
             // caller must hold lock on mLock for all _l methods
 
-            status_t createTrack_l(size_t epoch);
+            status_t createTrack_l();
 
             // can only be called when mState != STATE_ACTIVE
             void flush_l();
@@ -658,6 +666,9 @@ protected:
 
             bool     isDirect_l() const
                 { return (mFlags & AUDIO_OUTPUT_FLAG_DIRECT) != 0; }
+
+            // increment mPosition by the delta of mServer, and return new value of mPosition
+            uint32_t updateAndGetPosition_l();
 
     // Next 4 fields may be changed if IAudioTrack is re-created, but always != 0
     sp<IAudioTrack>         mAudioTrack;
@@ -731,6 +742,20 @@ protected:
     bool                    mMarkerReached;
     uint32_t                mNewPosition;           // in frames
     uint32_t                mUpdatePeriod;          // in frames, zero means no EVENT_NEW_POS
+    uint32_t                mServer;                // in frames, last known mProxy->getPosition()
+                                                    // which is count of frames consumed by server,
+                                                    // reset by new IAudioTrack,
+                                                    // whether it is reset by stop() is TBD
+    uint32_t                mPosition;              // in frames, like mServer except continues
+                                                    // monotonically after new IAudioTrack,
+                                                    // and could be easily widened to uint64_t
+    uint32_t                mReleased;              // in frames, count of frames released to server
+                                                    // but not necessarily consumed by server,
+                                                    // reset by stop() but continues monotonically
+                                                    // after new IAudioTrack to restore mPosition,
+                                                    // and could be easily widened to uint64_t
+    int64_t                 mStartUs;               // the start time after flush or stop.
+                                                    // only used for offloaded and direct tracks.
 
     audio_output_flags_t    mFlags;
         // const after set(), except for bits AUDIO_OUTPUT_FLAG_FAST and AUDIO_OUTPUT_FLAG_OFFLOAD.
