@@ -337,13 +337,15 @@ size_t NuPlayer::Renderer::fillAudioBuffer(void *buffer, size_t size) {
             }
             mAnchorTimeMediaUs = mediaTimeUs;
 
-            // TODO: figure out how to calculate initial latency if
-            // getTimestamp is not available. Otherwise, the initial time
-            // is not correct till the first sample is played.
-            int64_t nowUs = ALooper::GetNowUs();
-            mAnchorTimeMediaUs =
-                mFirstAudioTimeUs + getPlayedOutAudioDurationUs(nowUs);
-            mAnchorTimeRealUs = nowUs;
+            uint32_t numFramesPlayed;
+            CHECK_EQ(mAudioSink->getPosition(&numFramesPlayed), (status_t)OK);
+
+            // TODO: figure out how to calculate initial latency.
+            // Otherwise, the initial time is not correct till the first sample
+            // is played.
+            mAnchorTimeMediaUs = mFirstAudioTimeUs
+                    + (numFramesPlayed * mAudioSink->msecsPerFrame()) * 1000ll;
+            mAnchorTimeRealUs = ALooper::GetNowUs();
         }
 
         size_t copy = entry->mBuffer->size() - entry->mOffset;
@@ -463,12 +465,6 @@ bool NuPlayer::Renderer::onDrainAudioQueue() {
     notifyPosition();
 
     return !mAudioQueue.empty();
-}
-
-int64_t NuPlayer::Renderer::getPendingAudioPlayoutDurationUs(int64_t nowUs) {
-    int64_t writtenAudioDurationUs =
-        mNumFramesWritten * 1000LL * mAudioSink->msecsPerFrame();
-    return writtenAudioDurationUs - getPlayedOutAudioDurationUs(nowUs);
 }
 
 void NuPlayer::Renderer::postDrainVideoQueue() {
@@ -895,27 +891,9 @@ void NuPlayer::Renderer::onResume() {
     }
 }
 
-int64_t NuPlayer::Renderer::getPlayedOutAudioDurationUs(int64_t nowUs) {
-    // FIXME: getTimestamp sometimes returns negative frame count.
-    // Since we do not handle the rollover at this point (which can
-    // happen every 14 hours), simply treat the timestamp as signed.
+void NuPlayer::Renderer::onAudioOffloadTearDown() {
     uint32_t numFramesPlayed;
-    int64_t numFramesPlayedAt;
-    AudioTimestamp ts;
-    status_t res = mAudioSink->getTimestamp(ts);
-    if (res == OK) {
-        numFramesPlayed = ts.mPosition;
-        numFramesPlayedAt =
-            ts.mTime.tv_sec * 1000000LL + ts.mTime.tv_nsec / 1000;
-    } else {
-        res = mAudioSink->getPosition(&numFramesPlayed);
-        CHECK_EQ(res, (status_t)OK);
-        numFramesPlayedAt = nowUs;
-        numFramesPlayedAt += 1000LL * mAudioSink->latency() / 2; /* XXX */
-    }
-    return (int32_t)numFramesPlayed * 1000LL * mAudioSink->msecsPerFrame()
-            + nowUs - numFramesPlayedAt;
-}
+    CHECK_EQ(mAudioSink->getPosition(&numFramesPlayed), (status_t)OK);
 
     int64_t currentPositionUs = mFirstAudioTimeUs
             + (numFramesPlayed * mAudioSink->msecsPerFrame()) * 1000ll;
