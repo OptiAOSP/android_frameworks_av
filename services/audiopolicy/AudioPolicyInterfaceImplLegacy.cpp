@@ -235,7 +235,8 @@ audio_io_handle_t AudioPolicyService::getInput(audio_source_t inputSource,
     return input;
 }
 
-status_t AudioPolicyService::startInput(audio_io_handle_t input)
+status_t AudioPolicyService::startInput(audio_io_handle_t input,
+                                        audio_session_t session __unused)
 {
     if (mpAudioPolicy == NULL) {
         return NO_INIT;
@@ -245,7 +246,8 @@ status_t AudioPolicyService::startInput(audio_io_handle_t input)
     return mpAudioPolicy->start_input(mpAudioPolicy, input);
 }
 
-status_t AudioPolicyService::stopInput(audio_io_handle_t input)
+status_t AudioPolicyService::stopInput(audio_io_handle_t input,
+                                       audio_session_t session __unused)
 {
     if (mpAudioPolicy == NULL) {
         return NO_INIT;
@@ -255,7 +257,8 @@ status_t AudioPolicyService::stopInput(audio_io_handle_t input)
     return mpAudioPolicy->stop_input(mpAudioPolicy, input);
 }
 
-void AudioPolicyService::releaseInput(audio_io_handle_t input)
+void AudioPolicyService::releaseInput(audio_io_handle_t input,
+                                      audio_session_t session __unused)
 {
     if (mpAudioPolicy == NULL) {
         return;
@@ -493,10 +496,21 @@ audio_io_handle_t AudioPolicyService::getOutputForAttr(const audio_attributes_t 
                                     audio_output_flags_t flags,
                                     const audio_offload_info_t *offloadInfo)
 {
-    //FIXME: temporary to fix build with USE_LEGACY_AUDIO_POLICY
-    audio_stream_type_t stream = AUDIO_STREAM_MUSIC;
+    audio_stream_type_t stream = audio_attributes_to_stream_type(attr);
+
     return getOutput(stream, samplingRate, format, channelMask, flags, offloadInfo);
 }
 
+status_t AudioPolicyService::acquireSoundTriggerSession(audio_session_t *session,
+                                       audio_io_handle_t *ioHandle,
+                                       audio_devices_t *device)
+{
+    return INVALID_OPERATION;
+}
+
+status_t AudioPolicyService::releaseSoundTriggerSession(audio_session_t session)
+{
+    return INVALID_OPERATION;
+}
 
 }; // namespace android

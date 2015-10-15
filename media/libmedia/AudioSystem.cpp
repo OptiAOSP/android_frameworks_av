@@ -427,11 +427,11 @@ uint32_t AudioSystem::getInputFramesLost(audio_io_handle_t ioHandle)
     return result;
 }
 
-int AudioSystem::newAudioSessionId()
+audio_unique_id_t AudioSystem::newAudioUniqueId()
 {
     const sp<IAudioFlinger>& af = AudioSystem::get_audio_flinger();
-    if (af == 0) return AUDIO_SESSION_ALLOCATE;
-    return af->newAudioSessionId();
+    if (af == 0) return AUDIO_UNIQUE_ID_ALLOCATE;
+    return af->newAudioUniqueId();
 }
 
 void AudioSystem::acquireAudioSessionId(int audioSession, pid_t pid)
@@ -448,6 +448,13 @@ void AudioSystem::releaseAudioSessionId(int audioSession, pid_t pid)
     if (af != 0) {
         af->releaseAudioSessionId(audioSession, pid);
     }
+}
+
+audio_hw_sync_t AudioSystem::getAudioHwSyncForSession(audio_session_t sessionId)
+{
+    const sp<IAudioFlinger>& af = AudioSystem::get_audio_flinger();
+    if (af == 0) return AUDIO_HW_SYNC_INVALID;
+    return af->getAudioHwSyncForSession(sessionId);
 }
 
 // ---------------------------------------------------------------------------
@@ -575,9 +582,13 @@ const sp<IAudioPolicyService>& AudioSystem::get_audio_policy_service()
         }
         binder->linkToDeath(gAudioPolicyServiceClient);
         gAudioPolicyService = interface_cast<IAudioPolicyService>(binder);
-        gAudioPolicyService->registerClient(gAudioPolicyServiceClient);
         gLock.unlock();
+        // Registering the client takes the AudioPolicyService lock.
+        // Don't hold the AudioSystem lock at the same time.
+        gAudioPolicyService->registerClient(gAudioPolicyServiceClient);
     } else {
+        // There exists a benign race condition where gAudioPolicyService
+        // is set, but gAudioPolicyServiceClient is not yet registered.
         gLock.unlock();
     }
     return gAudioPolicyService;
@@ -696,25 +707,28 @@ audio_io_handle_t AudioSystem::getInput(audio_source_t inputSource,
     return aps->getInput(inputSource, samplingRate, format, channelMask, sessionId, flags);
 }
 
-status_t AudioSystem::startInput(audio_io_handle_t input)
+status_t AudioSystem::startInput(audio_io_handle_t input,
+                                 audio_session_t session)
 {
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
-    return aps->startInput(input);
+    return aps->startInput(input, session);
 }
 
-status_t AudioSystem::stopInput(audio_io_handle_t input)
+status_t AudioSystem::stopInput(audio_io_handle_t input,
+                                audio_session_t session)
 {
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
-    return aps->stopInput(input);
+    return aps->stopInput(input, session);
 }
 
-void AudioSystem::releaseInput(audio_io_handle_t input)
+void AudioSystem::releaseInput(audio_io_handle_t input,
+                               audio_session_t session)
 {
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return;
-    aps->releaseInput(input);
+    aps->releaseInput(input, session);
 }
 
 status_t AudioSystem::initStreamVolume(audio_stream_type_t stream,
@@ -910,6 +924,21 @@ void AudioSystem::setAudioPortCallback(sp<AudioPortCallback> callBack)
     gAudioPortCallback = callBack;
 }
 
+status_t AudioSystem::acquireSoundTriggerSession(audio_session_t *session,
+                                       audio_io_handle_t *ioHandle,
+                                       audio_devices_t *device)
+{
+    const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
+    if (aps == 0) return PERMISSION_DENIED;
+    return aps->acquireSoundTriggerSession(session, ioHandle, device);
+}
+
+status_t AudioSystem::releaseSoundTriggerSession(audio_session_t session)
+{
+    const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
+    if (aps == 0) return PERMISSION_DENIED;
+    return aps->releaseSoundTriggerSession(session);
+}
 // ---------------------------------------------------------------------------
 
 void AudioSystem::AudioPolicyServiceClient::binderDied(const wp<IBinder>& who __unused)

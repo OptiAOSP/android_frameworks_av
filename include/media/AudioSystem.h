@@ -139,15 +139,20 @@ public:
     // return the number of input frames lost by HAL implementation, or 0 if the handle is invalid
     static uint32_t getInputFramesLost(audio_io_handle_t ioHandle);
 
-    // Allocate a new audio session ID and return that new ID.
-    // If unable to contact AudioFlinger, returns AUDIO_SESSION_ALLOCATE instead.
-    // FIXME If AudioFlinger were to ever exhaust the session ID namespace,
-    //       this method could fail by returning either AUDIO_SESSION_ALLOCATE
-    //       or an unspecified existing session ID.
-    static int newAudioSessionId();
+    // Allocate a new unique ID for use as an audio session ID or I/O handle.
+    // If unable to contact AudioFlinger, returns AUDIO_UNIQUE_ID_ALLOCATE instead.
+    // FIXME If AudioFlinger were to ever exhaust the unique ID namespace,
+    //       this method could fail by returning either AUDIO_UNIQUE_ID_ALLOCATE
+    //       or an unspecified existing unique ID.
+    static audio_unique_id_t newAudioUniqueId();
 
     static void acquireAudioSessionId(int audioSession, pid_t pid);
     static void releaseAudioSessionId(int audioSession, pid_t pid);
+
+    // Get the HW synchronization source used for an audio session.
+    // Return a valid source or AUDIO_HW_SYNC_INVALID if an error occurs
+    // or no HW sync source is used.
+    static audio_hw_sync_t getAudioHwSyncForSession(audio_session_t sessionId);
 
     // types of io configuration change events received with ioConfigChanged()
     enum io_config_event {
@@ -237,9 +242,12 @@ public:
                                     int sessionId,
                                     audio_input_flags_t);
 
-    static status_t startInput(audio_io_handle_t input);
-    static status_t stopInput(audio_io_handle_t input);
-    static void releaseInput(audio_io_handle_t input);
+    static status_t startInput(audio_io_handle_t input,
+                               audio_session_t session);
+    static status_t stopInput(audio_io_handle_t input,
+                              audio_session_t session);
+    static void releaseInput(audio_io_handle_t input,
+                             audio_session_t session);
     static status_t initStreamVolume(audio_stream_type_t stream,
                                       int indexMin,
                                       int indexMax);
@@ -305,6 +313,12 @@ public:
                                       unsigned int *generation);
     /* Set audio port configuration */
     static status_t setAudioPortConfig(const struct audio_port_config *config);
+
+
+    static status_t acquireSoundTriggerSession(audio_session_t *session,
+                                           audio_io_handle_t *ioHandle,
+                                           audio_devices_t *device);
+    static status_t releaseSoundTriggerSession(audio_session_t session);
 
     // ----------------------------------------------------------------------------
 
