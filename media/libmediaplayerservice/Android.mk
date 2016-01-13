@@ -45,6 +45,7 @@ LOCAL_SHARED_LIBRARIES :=       \
 LOCAL_STATIC_LIBRARIES :=       \
     libstagefright_nuplayer     \
     libstagefright_rtsp         \
+    libstagefright_timedtext    \
 
 LOCAL_WHOLE_STATIC_LIBRARIES := \
     libavmediaserviceextensions \

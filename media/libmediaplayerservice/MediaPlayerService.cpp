@@ -58,7 +58,7 @@
 #include <media/MemoryLeakTrackUtil.h>
 #include <media/stagefright/MediaCodecList.h>
 #include <media/stagefright/MediaErrors.h>
-#include <media/stagefright/AudioPlayer.h>
+#include <media/stagefright/Utils.h>
 #include <media/stagefright/foundation/ADebug.h>
 #include <media/stagefright/foundation/ALooperRoster.h>
 #include <mediautils/BatteryNotifier.h>
