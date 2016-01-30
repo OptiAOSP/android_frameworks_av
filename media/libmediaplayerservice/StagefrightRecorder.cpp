@@ -1452,9 +1452,11 @@ status_t StagefrightRecorder::setupVideoEncoder(
     }
 
     uint32_t flags = 0;
+/*
     if (mIsMetaDataStoredInVideoBuffers) {
         flags |= MediaCodecSource::FLAG_USE_METADATA_INPUT;
     }
+*/
 
     if (cameraSource == NULL) {
         flags |= MediaCodecSource::FLAG_USE_SURFACE_INPUT;
@@ -1467,15 +1469,23 @@ status_t StagefrightRecorder::setupVideoEncoder(
         // When the encoder fails to be created, we need
         // release the camera source due to the camera's lock
         // and unlock mechanism.
-        if (cameraSource != NULL) {
-            cameraSource->stop();
-        }
+        cameraSource->stop();
         return UNKNOWN_ERROR;
     }
 
-    if (cameraSource == NULL) {
-        mGraphicBufferProducer = encoder->getGraphicBufferProducer();
-    }
+     if (cameraSource == NULL) {
+       ALOGW("cameraSource == NULL, retrieving GraphicBufferProducer");
+     
+
+	     if (mGraphicBufferProducer == NULL) {
+	         ALOGW("mGraphicBufferProducer == NULL, retrieving GraphicBufferProducer");
+	     }
+               mGraphicBufferProducer = encoder->getGraphicBufferProducer();
+	}
+
+       if (mGraphicBufferProducer == NULL)
+		ALOGW("mGraphicBufferProducer == NULL!!!");
+
 
     *source = encoder;
 
