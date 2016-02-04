@@ -120,8 +120,6 @@ struct OMXCodec : public MediaSource,
     static uint32_t getComponentQuirks(
             const sp<MediaCodecInfo> &list);
 
-    static bool findCodecQuirks(const char *componentName, uint32_t *quirks);
-
 protected:
     virtual ~OMXCodec();
 
