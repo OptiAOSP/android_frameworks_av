@@ -172,7 +172,7 @@ bool MediaCodec::ResourceManagerServiceProxy::reclaimResource(
 
 // static
 sp<MediaCodec> MediaCodec::CreateByType(
-        const sp<ALooper> &looper, const char *mime, bool encoder, status_t *err, pid_t pid) {
+        const sp<ALooper> &looper, const AString &mime, bool encoder, status_t *err, pid_t pid) {
     sp<MediaCodec> codec = new MediaCodec(looper, pid);
 
     const status_t ret = codec->init(mime, true /* nameIsType */, encoder);
@@ -184,7 +184,7 @@ sp<MediaCodec> MediaCodec::CreateByType(
 
 // static
 sp<MediaCodec> MediaCodec::CreateByComponentName(
-        const sp<ALooper> &looper, const char *name, status_t *err, pid_t pid) {
+        const sp<ALooper> &looper, const AString &name, status_t *err, pid_t pid) {
     sp<MediaCodec> codec = new MediaCodec(looper, pid);
 
     const status_t ret = codec->init(name, false /* nameIsType */, false /* encoder */);
