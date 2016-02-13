@@ -17,6 +17,7 @@ LOCAL_CFLAGS += -Werror -Wall
 LOCAL_CLANG := true
 
 LOCAL_SHARED_LIBRARIES := \
+        liblog \
         libbinder \
         libcrypto \
         libcutils \
