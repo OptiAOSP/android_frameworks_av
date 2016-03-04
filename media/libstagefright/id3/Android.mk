@@ -18,7 +18,7 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES := \
 	testid3.cpp
 
-LOCAL_CFLAGS += -Werror -Wall
+LOCAL_CFLAGS += -Os
 LOCAL_CLANG := true
 
 LOCAL_SHARED_LIBRARIES := \
