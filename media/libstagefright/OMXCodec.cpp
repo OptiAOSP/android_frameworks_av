@@ -1869,7 +1869,11 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
             mNativeWindow.get(),
             def.format.video.nFrameWidth,
             def.format.video.nFrameHeight,
+#ifdef STE_HARDWARE
+            OmxToHALFormat(def.format.video.eColorFormat),
+#else
             def.format.video.eColorFormat,
+#endif
             rotationDegrees,
             usage | GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP);
     if (err != 0) {
