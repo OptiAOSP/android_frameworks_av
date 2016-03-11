@@ -26,9 +26,15 @@ const char *MEDIA_MIMETYPE_VIDEO_AVC = "video/avc";
 const char *MEDIA_MIMETYPE_VIDEO_HEVC = "video/hevc";
 const char *MEDIA_MIMETYPE_VIDEO_MPEG4 = "video/mp4v-es";
 const char *MEDIA_MIMETYPE_VIDEO_H263 = "video/3gpp";
+#ifdef STE_HARDWARE
+const char *MEDIA_MIMETYPE_VIDEO_H263_SW = "video/3gpp-sw";
+#endif
 const char *MEDIA_MIMETYPE_VIDEO_MPEG2 = "video/mpeg2";
 const char *MEDIA_MIMETYPE_VIDEO_RAW = "video/raw";
 const char *MEDIA_MIMETYPE_VIDEO_DOLBY_VISION = "video/dolby-vision";
+#ifdef STE_HARDWARE
+const char *MEDIA_MIMETYPE_VIDEO_VC1 = "video/vc1";
+#endif
 
 const char *MEDIA_MIMETYPE_AUDIO_AMR_NB = "audio/3gpp";
 const char *MEDIA_MIMETYPE_AUDIO_AMR_WB = "audio/amr-wb";
@@ -69,7 +75,7 @@ const char *MEDIA_MIMETYPE_DATA_TIMED_ID3 = "application/x-id3v4";
 const char *MEDIA_MIMETYPE_VIDEO_FLV1 = "video/x-flv";
 const char *MEDIA_MIMETYPE_VIDEO_MJPEG = "video/x-jpeg";
 const char *MEDIA_MIMETYPE_VIDEO_RV = "video/vnd.rn-realvideo";
-const char *MEDIA_MIMETYPE_VIDEO_VC1 = "video/vc1";
+//const char *MEDIA_MIMETYPE_VIDEO_VC1 = "video/vc1";
 const char *MEDIA_MIMETYPE_VIDEO_FFMPEG = "video/ffmpeg";
 
 const char *MEDIA_MIMETYPE_AUDIO_PCM = "audio/x-pcm";
