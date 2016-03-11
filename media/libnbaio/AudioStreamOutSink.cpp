@@ -66,6 +66,7 @@ ssize_t AudioStreamOutSink::write(const void *buffer, size_t count)
     return ret;
 }
 
+#ifndef HAVE_PRE_KITKAT_AUDIO_BLOB
 status_t AudioStreamOutSink::getTimestamp(ExtendedTimestamp &timestamp)
 {
     if (mStream->get_presentation_position == NULL) {
@@ -82,5 +83,6 @@ status_t AudioStreamOutSink::getTimestamp(ExtendedTimestamp &timestamp)
             time.tv_sec * 1000000000LL + time.tv_nsec;
     return OK;
 }
+#endif
 
 }   // namespace android
