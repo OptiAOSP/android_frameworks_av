@@ -54,7 +54,7 @@ LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/frameworks/native/include/media/openmax                  \
     $(TOP)/external/tremolo/Tremolo                                 \
 
-LOCAL_CFLAGS += -Werror -Wno-error=deprecated-declarations -Wall
+LOCAL_CFLAGS += -Wno-error=deprecated-declarations -Wall
 LOCAL_CLANG := true
 
 LOCAL_MODULE:= libmediaplayerservice

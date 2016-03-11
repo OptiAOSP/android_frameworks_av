@@ -123,7 +123,7 @@ LOCAL_SHARED_LIBRARIES += \
         libdl \
         libRScpp \
 
-LOCAL_CFLAGS += -Wno-multichar -Werror -Wno-error=deprecated-declarations -Wall
+LOCAL_CFLAGS += -Wno-multichar -Wno-error=deprecated-declarations -Wall
 
 # enable experiments only in userdebug and eng builds
 ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))
