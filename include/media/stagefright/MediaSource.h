@@ -99,9 +99,8 @@ struct MediaSource : public virtual RefBase {
     };
 
     // Causes this source to suspend pulling data from its upstream source
-    // until a subsequent read-with-seek. This is currently not supported
-    // as such by any source. E.g. MediaCodecSource does not susped its
-    // upstream source, and instead discard upstream data while paused.
+    // until a subsequent read-with-seek. Currently only supported by
+    // OMXCodec.
     virtual status_t pause() {
         return ERROR_UNSUPPORTED;
     }
