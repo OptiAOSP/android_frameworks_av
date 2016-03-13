@@ -51,6 +51,8 @@ LOCAL_STATIC_LIBRARIES := \
 LOCAL_MODULE:= libaudiopolicyservice
 
 LOCAL_CFLAGS += -fvisibility=hidden
+LOCAL_USE_STD_GNU_CPP11 := true
+LOCAL_CLANG := false
 
 include $(BUILD_SHARED_LIBRARY)
 
