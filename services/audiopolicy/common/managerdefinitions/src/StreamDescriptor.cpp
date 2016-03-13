@@ -35,10 +35,7 @@ namespace android {
 StreamDescriptor::StreamDescriptor()
     :   mIndexMin(0), mIndexMax(1), mCanBeMuted(true)
 {
-    // Initialize the current stream's index to mIndexMax so volume isn't 0 in
-    // cases where the Java layer doesn't call into the audio policy service to
-    // set the default volume.
-    mIndexCur.add(AUDIO_DEVICE_OUT_DEFAULT, mIndexMax);
+    mIndexCur.add(AUDIO_DEVICE_OUT_DEFAULT, 0);
 }
 
 int StreamDescriptor::getVolumeIndex(audio_devices_t device) const
