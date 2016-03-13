@@ -333,8 +333,8 @@ public:
     virtual void onDynamicPolicyMixStateUpdate(String8 regId, int32_t state) = 0;
 };
 
-//extern "C" AudioPolicyInterface* createAudioPolicyManager(AudioPolicyClientInterface *clientInterface);
-//extern "C" void destroyAudioPolicyManager(AudioPolicyInterface *interface);
+extern "C" AudioPolicyInterface* createAudioPolicyManager(AudioPolicyClientInterface *clientInterface);
+extern "C" void destroyAudioPolicyManager(AudioPolicyInterface *interface);
 
 
 }; // namespace android
