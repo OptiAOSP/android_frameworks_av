@@ -331,6 +331,11 @@ void AudioPolicyService::releaseInput(audio_io_handle_t input,
         return;
     }
 
+#ifdef HAVE_PRE_KITKAT_AUDIO_POLICY_BLOB
+    if (inputSource == AUDIO_SOURCE_HOTWORD)
+      inputSource = AUDIO_SOURCE_VOICE_RECOGNITION;
+#endif
+
     sp<AudioPolicyEffects>audioPolicyEffects;
     {
         Mutex::Autolock _l(mLock);
@@ -511,6 +516,9 @@ status_t AudioPolicyService::queryDefaultPreProcessing(int audioSession,
                                                        effect_descriptor_t *descriptors,
                                                        uint32_t *count)
 {
+#if HAVE_PRE_KITKAT_AUDIO_POLICY_BLOB
+    return false;
+#endif
     if (mpAudioPolicy == NULL) {
         *count = 0;
         return NO_INIT;
