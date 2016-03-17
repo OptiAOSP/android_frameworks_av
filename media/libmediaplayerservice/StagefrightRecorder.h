@@ -132,6 +132,7 @@ protected:
     // will be sent to the client side using which the
     // frame buffers will be queued and dequeued
     sp<IGraphicBufferProducer> mGraphicBufferProducer;
+    sp<SurfaceMediaSource> mSurfaceMediaSource;
     sp<ALooper> mLooper;
 
     static const int kMaxHighSpeedFps = 1000;
@@ -152,6 +153,9 @@ protected:
     // depending on the videosource type
     status_t setupMediaSource(sp<MediaSource> *mediaSource);
     status_t setupCameraSource(sp<CameraSource> *cameraSource);
+    // setup the surfacemediasource for the encoder
+    status_t setupSurfaceMediaSource();
+
     status_t setupAudioEncoder(const sp<MediaWriter>& writer);
     virtual status_t setupVideoEncoder(sp<MediaSource> cameraSource, sp<MediaSource> *source);
     virtual void setupCustomVideoEncoderParams(sp<MediaSource> cameraSource,
