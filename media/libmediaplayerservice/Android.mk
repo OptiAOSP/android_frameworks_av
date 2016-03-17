@@ -58,7 +58,7 @@ LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/external/tremolo/Tremolo                                 \
     $(TOP)/frameworks/av/media/libavextensions                      \
 
-LOCAL_CFLAGS += -Werror -Wno-error=deprecated-declarations -Wall #-DLOG_NDEBUG=0
+LOCAL_CFLAGS += -Wno-error=deprecated-declarations -Wall #-DLOG_NDEBUG=0
 LOCAL_CLANG := true
 
 LOCAL_MODULE:= libmediaplayerservice

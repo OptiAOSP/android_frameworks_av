@@ -155,7 +155,7 @@ LOCAL_SHARED_LIBRARIES += \
         libdl \
         libRScpp \
 
-LOCAL_CFLAGS += -Werror -Wno-multichar -Wno-error=deprecated-declarations
+LOCAL_CFLAGS += -Wno-multichar -Wno-error=deprecated-declarations
 
 ifeq ($(TARGET_USES_QCOM_BSP), true)
     LOCAL_C_INCLUDES += $(call project-path-for,qcom-display)/libgralloc
