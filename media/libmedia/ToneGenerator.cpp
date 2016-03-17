@@ -865,6 +865,7 @@ ToneGenerator::~ToneGenerator() {
         ALOGV("Delete Track: %p", mpAudioTrack.get());
         mpAudioTrack.clear();
     }
+    clearWaveGens();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
