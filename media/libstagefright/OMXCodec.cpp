@@ -1926,7 +1926,11 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
     // This check was present in KitKat.
     if (def.nBufferCountActual < def.nBufferCountMin + minUndequeuedBufs) {
 #endif
+#ifdef STE_HARDWARE
+    for (OMX_U32 extraBuffers = 1; /* condition inside loop */; extraBuffers--) {
+#else
     for (OMX_U32 extraBuffers = 2 + 1; /* condition inside loop */; extraBuffers--) {
+#endif
         OMX_U32 newBufferCount =
             def.nBufferCountMin + minUndequeuedBufs + extraBuffers;
         def.nBufferCountActual = newBufferCount;
