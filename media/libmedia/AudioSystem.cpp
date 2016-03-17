@@ -998,10 +998,7 @@ void AudioSystem::clearAudioConfigCache()
 
 bool AudioSystem::isOffloadSupported(const audio_offload_info_t& info)
 {
-    ALOGV("isOffloadSupported()");
-    const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
-    if (aps == 0) return false;
-    return aps->isOffloadSupported(info);
+    return false;
 }
 
 status_t AudioSystem::listAudioPorts(audio_port_role_t role,
