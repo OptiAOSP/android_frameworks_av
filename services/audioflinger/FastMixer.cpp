@@ -392,6 +392,7 @@ void FastMixer::onWork()
                     underruns.mBitFields.mEmpty++;
                     underruns.mBitFields.mMostRecent = UNDERRUN_EMPTY;
                     mMixer->disable(name);
+                    memset(mMixerBuffer, 0, mMixerBufferSize);
                 } else {
                     // allow mixing partial buffer
                     underruns.mBitFields.mPartial++;
