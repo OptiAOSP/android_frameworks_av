@@ -98,7 +98,7 @@ LOCAL_C_INCLUDES := \
     $(call include-path-for, audio-utils)
 
 LOCAL_CFLAGS += -Wno-error=deprecated-declarations -Wall
-LOCAL_CLANG := true
+LOCAL_CLANG := false
 
 include $(BUILD_SHARED_LIBRARY)
 
