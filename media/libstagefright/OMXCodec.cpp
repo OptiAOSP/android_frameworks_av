@@ -4055,7 +4055,8 @@ status_t OMXCodec::initNativeWindow() {
     // Enable use of a GraphicBuffer as the output for this node.  This must
     // happen before getting the IndexParamPortDefinition parameter because it
     // will affect the pixel format that the node reports.
-    status_t err = mOMX->enableNativeBuffers(mNode, kPortIndexOutput, OMX_TRUE);
+    status_t err = mOMX->enableNativeBuffers(mNode, kPortIndexOutput, OMX_TRUE /* graphic */,
+		 OMX_TRUE /* enable */);
     if (err != 0) {
         return err;
     }
@@ -4346,7 +4347,8 @@ status_t QueryCodec(
 
     sp<OMXCodecObserver> observer = new OMXCodecObserver;
     IOMX::node_id node;
-    status_t err = omx->allocateNode(componentName, observer, &node);
+    status_t err = omx->allocateNode(componentName, observer,
+			NULL /* nodeBinder */, &node);
 
     if (err != OK) {
         return err;
