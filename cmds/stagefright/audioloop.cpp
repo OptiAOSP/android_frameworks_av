@@ -23,14 +23,13 @@
 #include <binder/ProcessState.h>
 #include <media/mediarecorder.h>
 #include <media/stagefright/foundation/ADebug.h>
-#include <media/stagefright/foundation/AMessage.h>
 #include <media/stagefright/AMRWriter.h>
 #include <media/stagefright/AudioPlayer.h>
 #include <media/stagefright/AudioSource.h>
-#include <media/stagefright/MediaCodecSource.h>
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/MetaData.h>
-#include <media/stagefright/SimpleDecodingSource.h>
+#include <media/stagefright/OMXClient.h>
+#include <media/stagefright/OMXCodec.h>
 #include "SineSource.h"
 
 using namespace android;
@@ -80,6 +79,8 @@ int main(int argc, char* argv[])
     const int32_t kBitRate = outputWBAMR ? 16000 : 8000;
 
     android::ProcessState::self()->startThreadPool();
+    OMXClient client;
+    CHECK_EQ(client.connect(), (status_t)OK);
     sp<MediaSource> source;
 
     if (useMic) {
@@ -94,25 +95,24 @@ int main(int argc, char* argv[])
         source = new SineSource(kSampleRate, channels);
     }
 
-    sp<AMessage> meta = new AMessage;
-    meta->setString(
-            "mime",
+    sp<MetaData> meta = new MetaData;
+    meta->setCString(
+            kKeyMIMEType,
             outputWBAMR ? MEDIA_MIMETYPE_AUDIO_AMR_WB
                     : MEDIA_MIMETYPE_AUDIO_AMR_NB);
 
-    meta->setInt32("channel-count", channels);
-    meta->setInt32("sample-rate", kSampleRate);
-    meta->setInt32("bitrate", kBitRate);
+    meta->setInt32(kKeyChannelCount, channels);
+    meta->setInt32(kKeySampleRate, kSampleRate);
+    meta->setInt32(kKeyBitRate, kBitRate);
     int32_t maxInputSize;
     if (source->getFormat()->findInt32(kKeyMaxInputSize, &maxInputSize)) {
-        meta->setInt32("max-input-size", maxInputSize);
+        meta->setInt32(kKeyMaxInputSize, maxInputSize);
     }
 
-    sp<ALooper> looper = new ALooper;
-    looper->setName("audioloop");
-    looper->start();
-
-    sp<IMediaSource> encoder = MediaCodecSource::Create(looper, meta, source);
+    sp<IMediaSource> encoder = OMXCodec::Create(
+            client.interface(),
+            meta, true /* createEncoder */,
+            source);
 
     if (fileOut != NULL) {
         // target file specified, write encoded AMR output
@@ -128,15 +128,17 @@ int main(int argc, char* argv[])
         writer->stop();
     } else {
         // otherwise decode to speaker
-        sp<IMediaSource> decoder = SimpleDecodingSource::Create(encoder);
+        sp<IMediaSource> decoder = OMXCodec::Create(
+                client.interface(),
+                meta, false /* createEncoder */,
+                encoder);
 
         if (playToSpeaker) {
             AudioPlayer *player = new AudioPlayer(NULL);
             player->setSource(decoder);
             player->start();
             sleep(duration);
-
-            decoder.clear(); // must clear |decoder| otherwise delete player will hang.
+            source->stop(); // must stop source otherwise delete player will hang
             delete player; // there is no player->stop()...
         } else {
             CHECK_EQ(decoder->start(), (status_t)OK);
