@@ -50,6 +50,7 @@ LOCAL_MULTILIB := $(AUDIOSERVER_MULTILIB)
 LOCAL_MODULE:= libaudiopolicyservice
 
 LOCAL_CFLAGS += -fvisibility=hidden
+LOCAL_CLANG := false
 
 include $(BUILD_SHARED_LIBRARY)
 
