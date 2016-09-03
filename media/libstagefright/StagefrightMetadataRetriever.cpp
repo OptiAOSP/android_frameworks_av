@@ -36,12 +36,11 @@
 #include <media/stagefright/FileSource.h>
 #include <media/stagefright/MediaBuffer.h>
 #include <media/stagefright/MediaCodec.h>
-#include <media/stagefright/MediaCodecList.h>
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/MediaErrors.h>
 #include <media/stagefright/MediaExtractor.h>
-#include <media/stagefright/MediaSource.h>
 #include <media/stagefright/MetaData.h>
+#include <media/stagefright/OMXCodec.h>
 #include <media/stagefright/Utils.h>
 
 #include <CharacterEncodingDetector.h>
@@ -57,6 +56,7 @@ StagefrightMetadataRetriever::StagefrightMetadataRetriever()
     ALOGV("StagefrightMetadataRetriever()");
 
     DataSource::RegisterDefaultSniffers();
+    CHECK_EQ(mClient.connect(), (status_t)OK);
 }
 
 StagefrightMetadataRetriever::~StagefrightMetadataRetriever() {
@@ -65,6 +65,7 @@ StagefrightMetadataRetriever::~StagefrightMetadataRetriever() {
     if (mSource != NULL) {
         mSource->close();
     }
+    mClient.disconnect();
 }
 
 status_t StagefrightMetadataRetriever::setDataSource(
@@ -140,7 +141,7 @@ status_t StagefrightMetadataRetriever::setDataSource(
 }
 
 static VideoFrame *extractVideoFrame(
-        const AString &componentName,
+        const char *componentName,
         const sp<MetaData> &trackMeta,
         const sp<IMediaSource> &source,
         int64_t frameTimeUs,
@@ -165,7 +166,7 @@ static VideoFrame *extractVideoFrame(
             looper, componentName, &err);
 
     if (decoder.get() == NULL || err != OK) {
-        ALOGW("Failed to instantiate decoder [%s]", componentName.c_str());
+        ALOGW("Failed to instantiate decoder [%s]", componentName);
         return NULL;
     }
 
@@ -494,22 +495,23 @@ VideoFrame *StagefrightMetadataRetriever::getFrameAtTime(
     const char *mime;
     CHECK(trackMeta->findCString(kKeyMIMEType, &mime));
 
-    Vector<AString> matchingCodecs;
-    MediaCodecList::findMatchingCodecs(
+    Vector<OMXCodec::CodecNameAndQuirks> matchingCodecs;
+    OMXCodec::findMatchingCodecs(
             mime,
             false, /* encoder */
-            MediaCodecList::kPreferSoftwareCodecs,
+            NULL, /* matchComponentName */
+            OMXCodec::kPreferSoftwareCodecs,
             &matchingCodecs);
 
     for (size_t i = 0; i < matchingCodecs.size(); ++i) {
-        const AString &componentName = matchingCodecs[i];
+        const char *componentName = matchingCodecs[i].mName.string();
         VideoFrame *frame =
             extractVideoFrame(componentName, trackMeta, source, timeUs, option);
 
         if (frame != NULL) {
             return frame;
         }
-        ALOGV("%s failed to extract thumbnail, trying next decoder.", componentName.c_str());
+        ALOGV("%s failed to extract thumbnail, trying next decoder.", componentName);
     }
 
     return NULL;
