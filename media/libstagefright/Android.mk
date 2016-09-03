@@ -45,6 +45,7 @@ LOCAL_SRC_FILES:=                         \
         NuCachedSource2.cpp               \
         NuMediaExtractor.cpp              \
         OMXClient.cpp                     \
+        OMXCodec.cpp                      \
         OggExtractor.cpp                  \
         ProcessInfo.cpp                   \
         SampleIterator.cpp                \
