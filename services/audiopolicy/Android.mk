@@ -109,7 +109,7 @@ endif #ifeq ($(USE_XML_AUDIO_POLICY_CONF), 1)
 
 LOCAL_MULTILIB := $(AUDIOSERVER_MULTILIB)
 
-LOCAL_MODULE:= libaudiopolicymanagerdefault
+#LOCAL_MODULE:= libaudiopolicymanagerdefault
 
 include $(BUILD_SHARED_LIBRARY)
 
