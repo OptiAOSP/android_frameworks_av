@@ -99,7 +99,12 @@ LOCAL_C_INCLUDES := \
     $(call include-path-for, audio-utils)
 
 LOCAL_CFLAGS += -Wno-error=deprecated-declarations -Wall
+<<<<<<< HEAD
 LOCAL_CLANG := false
+=======
+LOCAL_CLANG := true
+LOCAL_SANITIZE := unsigned-integer-overflow signed-integer-overflow
+>>>>>>> 47c43d0... libmedia: log calls to audiopolicy blob
 
 include $(BUILD_SHARED_LIBRARY)
 
