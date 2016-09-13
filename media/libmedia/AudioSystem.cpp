@@ -569,6 +569,7 @@ status_t AudioSystem::AudioFlingerClient::getInputBufferSize(
                                                 uint32_t sampleRate, audio_format_t format,
                                                 audio_channel_mask_t channelMask, size_t* buffSize)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioFlinger>& af = AudioSystem::get_audio_flinger();
     if (af == 0) {
         return PERMISSION_DENIED;
@@ -599,6 +600,7 @@ status_t AudioSystem::AudioFlingerClient::getInputBufferSize(
 
 sp<AudioIoDescriptor> AudioSystem::AudioFlingerClient::getIoDescriptor_l(audio_io_handle_t ioHandle)
 {
+    ALOGE("%s: enter", __func__);
     sp<AudioIoDescriptor> desc;
     ssize_t index = mIoDescriptors.indexOfKey(ioHandle);
     if (index >= 0) {
@@ -609,6 +611,7 @@ sp<AudioIoDescriptor> AudioSystem::AudioFlingerClient::getIoDescriptor_l(audio_i
 
 sp<AudioIoDescriptor> AudioSystem::AudioFlingerClient::getIoDescriptor(audio_io_handle_t ioHandle)
 {
+    ALOGE("%s: enter", __func__);
     Mutex::Autolock _l(mLock);
     return getIoDescriptor_l(ioHandle);
 }
@@ -616,6 +619,7 @@ sp<AudioIoDescriptor> AudioSystem::AudioFlingerClient::getIoDescriptor(audio_io_
 status_t AudioSystem::AudioFlingerClient::addAudioDeviceCallback(
         const sp<AudioDeviceCallback>& callback, audio_io_handle_t audioIo)
 {
+    ALOGE("%s: enter", __func__);
     Mutex::Autolock _l(mLock);
     Vector < sp<AudioDeviceCallback> > callbacks;
     ssize_t ioIndex = mAudioDeviceCallbacks.indexOfKey(audioIo);
@@ -637,6 +641,8 @@ status_t AudioSystem::AudioFlingerClient::addAudioDeviceCallback(
 status_t AudioSystem::AudioFlingerClient::removeAudioDeviceCallback(
         const sp<AudioDeviceCallback>& callback, audio_io_handle_t audioIo)
 {
+    ALOGE("%s: enter", __func__);
+
     Mutex::Autolock _l(mLock);
     ssize_t ioIndex = mAudioDeviceCallbacks.indexOfKey(audioIo);
     if (ioIndex < 0) {
@@ -700,6 +706,7 @@ sp<AudioSystem::AudioPolicyServiceClient> AudioSystem::gAudioPolicyServiceClient
 // establish binder interface to AudioPolicy service
 const sp<IAudioPolicyService> AudioSystem::get_audio_policy_service()
 {
+    ALOGE("%s: enter", __func__);
     sp<IAudioPolicyService> ap;
     sp<AudioPolicyServiceClient> apc;
     {
@@ -738,6 +745,7 @@ status_t AudioSystem::setDeviceConnectionState(audio_devices_t device,
                                                const char *device_address,
                                                const char *device_name)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     const char *address = "";
     const char *name = "";
@@ -756,6 +764,7 @@ status_t AudioSystem::setDeviceConnectionState(audio_devices_t device,
 audio_policy_dev_state_t AudioSystem::getDeviceConnectionState(audio_devices_t device,
                                                   const char *device_address)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return AUDIO_POLICY_DEVICE_STATE_UNAVAILABLE;
 
@@ -764,6 +773,7 @@ audio_policy_dev_state_t AudioSystem::getDeviceConnectionState(audio_devices_t d
 
 status_t AudioSystem::setPhoneState(audio_mode_t state)
 {
+    ALOGE("%s: enter", __func__);
     if (uint32_t(state) >= AUDIO_MODE_CNT) return BAD_VALUE;
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
@@ -773,6 +783,7 @@ status_t AudioSystem::setPhoneState(audio_mode_t state)
 
 status_t AudioSystem::setForceUse(audio_policy_force_use_t usage, audio_policy_forced_cfg_t config)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->setForceUse(usage, config);
@@ -780,6 +791,7 @@ status_t AudioSystem::setForceUse(audio_policy_force_use_t usage, audio_policy_f
 
 audio_policy_forced_cfg_t AudioSystem::getForceUse(audio_policy_force_use_t usage)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return AUDIO_POLICY_FORCE_NONE;
     return aps->getForceUse(usage);
@@ -793,6 +805,7 @@ audio_io_handle_t AudioSystem::getOutput(audio_stream_type_t stream,
                                     audio_output_flags_t flags,
                                     const audio_offload_info_t *offloadInfo)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return 0;
     return aps->getOutput(stream, samplingRate, format, channelMask, flags, offloadInfo);
@@ -810,6 +823,7 @@ status_t AudioSystem::getOutputForAttr(const audio_attributes_t *attr,
                                         audio_port_handle_t selectedDeviceId,
                                         const audio_offload_info_t *offloadInfo)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return NO_INIT;
     return aps->getOutputForAttr(attr, output, session, stream, uid,
@@ -821,6 +835,7 @@ status_t AudioSystem::startOutput(audio_io_handle_t output,
                                   audio_stream_type_t stream,
                                   audio_session_t session)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->startOutput(output, stream, session);
@@ -830,6 +845,7 @@ status_t AudioSystem::stopOutput(audio_io_handle_t output,
                                  audio_stream_type_t stream,
                                  audio_session_t session)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->stopOutput(output, stream, session);
@@ -839,6 +855,7 @@ void AudioSystem::releaseOutput(audio_io_handle_t output,
                                 audio_stream_type_t stream,
                                 audio_session_t session)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return;
     aps->releaseOutput(output, stream, session);
@@ -855,6 +872,7 @@ status_t AudioSystem::getInputForAttr(const audio_attributes_t *attr,
                                 audio_input_flags_t flags,
                                 audio_port_handle_t selectedDeviceId)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return NO_INIT;
     return aps->getInputForAttr(
@@ -865,6 +883,7 @@ status_t AudioSystem::getInputForAttr(const audio_attributes_t *attr,
 status_t AudioSystem::startInput(audio_io_handle_t input,
                                  audio_session_t session)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->startInput(input, session);
@@ -873,6 +892,7 @@ status_t AudioSystem::startInput(audio_io_handle_t input,
 status_t AudioSystem::stopInput(audio_io_handle_t input,
                                 audio_session_t session)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->stopInput(input, session);
@@ -881,6 +901,7 @@ status_t AudioSystem::stopInput(audio_io_handle_t input,
 void AudioSystem::releaseInput(audio_io_handle_t input,
                                audio_session_t session)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return;
     aps->releaseInput(input, session);
@@ -890,6 +911,7 @@ status_t AudioSystem::initStreamVolume(audio_stream_type_t stream,
                                     int indexMin,
                                     int indexMax)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->initStreamVolume(stream, indexMin, indexMax);
@@ -899,6 +921,7 @@ status_t AudioSystem::setStreamVolumeIndex(audio_stream_type_t stream,
                                            int index,
                                            audio_devices_t device)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->setStreamVolumeIndex(stream, index, device);
@@ -908,6 +931,7 @@ status_t AudioSystem::getStreamVolumeIndex(audio_stream_type_t stream,
                                            int *index,
                                            audio_devices_t device)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->getStreamVolumeIndex(stream, index, device);
@@ -915,6 +939,7 @@ status_t AudioSystem::getStreamVolumeIndex(audio_stream_type_t stream,
 
 uint32_t AudioSystem::getStrategyForStream(audio_stream_type_t stream)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return 0;
     return aps->getStrategyForStream(stream);
@@ -922,6 +947,7 @@ uint32_t AudioSystem::getStrategyForStream(audio_stream_type_t stream)
 
 audio_devices_t AudioSystem::getDevicesForStream(audio_stream_type_t stream)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return AUDIO_DEVICE_NONE;
     return aps->getDevicesForStream(stream);
@@ -929,6 +955,7 @@ audio_devices_t AudioSystem::getDevicesForStream(audio_stream_type_t stream)
 
 audio_io_handle_t AudioSystem::getOutputForEffect(const effect_descriptor_t *desc)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     // FIXME change return type to status_t, and return PERMISSION_DENIED here
     if (aps == 0) return AUDIO_IO_HANDLE_NONE;
@@ -941,6 +968,7 @@ status_t AudioSystem::registerEffect(const effect_descriptor_t *desc,
                                 audio_session_t session,
                                 int id)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->registerEffect(desc, io, strategy, session, id);
@@ -948,6 +976,7 @@ status_t AudioSystem::registerEffect(const effect_descriptor_t *desc,
 
 status_t AudioSystem::unregisterEffect(int id)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->unregisterEffect(id);
@@ -955,6 +984,7 @@ status_t AudioSystem::unregisterEffect(int id)
 
 status_t AudioSystem::setEffectEnabled(int id, bool enabled)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->setEffectEnabled(id, enabled);
@@ -962,6 +992,7 @@ status_t AudioSystem::setEffectEnabled(int id, bool enabled)
 
 status_t AudioSystem::isStreamActive(audio_stream_type_t stream, bool* state, uint32_t inPastMs)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     if (state == NULL) return BAD_VALUE;
@@ -972,6 +1003,7 @@ status_t AudioSystem::isStreamActive(audio_stream_type_t stream, bool* state, ui
 status_t AudioSystem::isStreamActiveRemotely(audio_stream_type_t stream, bool* state,
         uint32_t inPastMs)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     if (state == NULL) return BAD_VALUE;
@@ -981,6 +1013,7 @@ status_t AudioSystem::isStreamActiveRemotely(audio_stream_type_t stream, bool* s
 
 status_t AudioSystem::isSourceActive(audio_source_t stream, bool* state)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     if (state == NULL) return BAD_VALUE;
@@ -990,6 +1023,7 @@ status_t AudioSystem::isSourceActive(audio_source_t stream, bool* state)
 
 uint32_t AudioSystem::getPrimaryOutputSamplingRate()
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioFlinger>& af = AudioSystem::get_audio_flinger();
     if (af == 0) return 0;
     return af->getPrimaryOutputSamplingRate();
@@ -997,6 +1031,7 @@ uint32_t AudioSystem::getPrimaryOutputSamplingRate()
 
 size_t AudioSystem::getPrimaryOutputFrameCount()
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioFlinger>& af = AudioSystem::get_audio_flinger();
     if (af == 0) return 0;
     return af->getPrimaryOutputFrameCount();
@@ -1004,6 +1039,7 @@ size_t AudioSystem::getPrimaryOutputFrameCount()
 
 status_t AudioSystem::setLowRamDevice(bool isLowRamDevice)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioFlinger>& af = AudioSystem::get_audio_flinger();
     if (af == 0) return PERMISSION_DENIED;
     return af->setLowRamDevice(isLowRamDevice);
@@ -1011,6 +1047,7 @@ status_t AudioSystem::setLowRamDevice(bool isLowRamDevice)
 
 void AudioSystem::clearAudioConfigCache()
 {
+    ALOGE("%s: enter", __func__);
     // called by restoreTrack_l(), which needs new IAudioFlinger and IAudioPolicyService instances
     ALOGV("clearAudioConfigCache()");
     {
@@ -1028,6 +1065,8 @@ void AudioSystem::clearAudioConfigCache()
 
 bool AudioSystem::isOffloadSupported(const audio_offload_info_t& info)
 {
+    ALOGE("%s: enter", __func__);
+    return false;
     ALOGV("isOffloadSupported()");
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return false;
@@ -1040,6 +1079,8 @@ status_t AudioSystem::listAudioPorts(audio_port_role_t role,
                                      struct audio_port *ports,
                                      unsigned int *generation)
 {
+    ALOGE("%s: enter", __func__);
+
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->listAudioPorts(role, type, num_ports, ports, generation);
@@ -1047,6 +1088,7 @@ status_t AudioSystem::listAudioPorts(audio_port_role_t role,
 
 status_t AudioSystem::getAudioPort(struct audio_port *port)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->getAudioPort(port);
@@ -1055,6 +1097,7 @@ status_t AudioSystem::getAudioPort(struct audio_port *port)
 status_t AudioSystem::createAudioPatch(const struct audio_patch *patch,
                                    audio_patch_handle_t *handle)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->createAudioPatch(patch, handle);
@@ -1062,6 +1105,7 @@ status_t AudioSystem::createAudioPatch(const struct audio_patch *patch,
 
 status_t AudioSystem::releaseAudioPatch(audio_patch_handle_t handle)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->releaseAudioPatch(handle);
@@ -1071,6 +1115,7 @@ status_t AudioSystem::listAudioPatches(unsigned int *num_patches,
                                   struct audio_patch *patches,
                                   unsigned int *generation)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->listAudioPatches(num_patches, patches, generation);
@@ -1078,6 +1123,7 @@ status_t AudioSystem::listAudioPatches(unsigned int *num_patches,
 
 status_t AudioSystem::setAudioPortConfig(const struct audio_port_config *config)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->setAudioPortConfig(config);
@@ -1085,6 +1131,7 @@ status_t AudioSystem::setAudioPortConfig(const struct audio_port_config *config)
 
 status_t AudioSystem::addAudioPortCallback(const sp<AudioPortCallback>& callback)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
 
@@ -1102,6 +1149,7 @@ status_t AudioSystem::addAudioPortCallback(const sp<AudioPortCallback>& callback
 /*static*/
 status_t AudioSystem::removeAudioPortCallback(const sp<AudioPortCallback>& callback)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
 
@@ -1119,6 +1167,7 @@ status_t AudioSystem::removeAudioPortCallback(const sp<AudioPortCallback>& callb
 status_t AudioSystem::addAudioDeviceCallback(
         const sp<AudioDeviceCallback>& callback, audio_io_handle_t audioIo)
 {
+    ALOGE("%s: enter", __func__);
     const sp<AudioFlingerClient> afc = getAudioFlingerClient();
     if (afc == 0) {
         return NO_INIT;
@@ -1136,6 +1185,7 @@ status_t AudioSystem::addAudioDeviceCallback(
 status_t AudioSystem::removeAudioDeviceCallback(
         const sp<AudioDeviceCallback>& callback, audio_io_handle_t audioIo)
 {
+    ALOGE("%s: enter", __func__);
     const sp<AudioFlingerClient> afc = getAudioFlingerClient();
     if (afc == 0) {
         return NO_INIT;
@@ -1145,6 +1195,7 @@ status_t AudioSystem::removeAudioDeviceCallback(
 
 audio_port_handle_t AudioSystem::getDeviceIdForIo(audio_io_handle_t audioIo)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioFlinger>& af = AudioSystem::get_audio_flinger();
     if (af == 0) return PERMISSION_DENIED;
     const sp<AudioIoDescriptor> desc = getIoDescriptor(audioIo);
@@ -1158,6 +1209,7 @@ status_t AudioSystem::acquireSoundTriggerSession(audio_session_t *session,
                                        audio_io_handle_t *ioHandle,
                                        audio_devices_t *device)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->acquireSoundTriggerSession(session, ioHandle, device);
@@ -1165,6 +1217,7 @@ status_t AudioSystem::acquireSoundTriggerSession(audio_session_t *session,
 
 status_t AudioSystem::releaseSoundTriggerSession(audio_session_t session)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->releaseSoundTriggerSession(session);
@@ -1172,6 +1225,7 @@ status_t AudioSystem::releaseSoundTriggerSession(audio_session_t session)
 
 audio_mode_t AudioSystem::getPhoneState()
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return AUDIO_MODE_INVALID;
     return aps->getPhoneState();
@@ -1179,6 +1233,7 @@ audio_mode_t AudioSystem::getPhoneState()
 
 status_t AudioSystem::registerPolicyMixes(Vector<AudioMix> mixes, bool registration)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->registerPolicyMixes(mixes, registration);
@@ -1188,6 +1243,7 @@ status_t AudioSystem::startAudioSource(const struct audio_port_config *source,
                                        const audio_attributes_t *attributes,
                                        audio_io_handle_t *handle)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->startAudioSource(source, attributes, handle);
@@ -1195,6 +1251,7 @@ status_t AudioSystem::startAudioSource(const struct audio_port_config *source,
 
 status_t AudioSystem::stopAudioSource(audio_io_handle_t handle)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->stopAudioSource(handle);
@@ -1202,6 +1259,7 @@ status_t AudioSystem::stopAudioSource(audio_io_handle_t handle)
 
 status_t AudioSystem::setMasterMono(bool mono)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->setMasterMono(mono);
@@ -1209,6 +1267,7 @@ status_t AudioSystem::setMasterMono(bool mono)
 
 status_t AudioSystem::getMasterMono(bool *mono)
 {
+    ALOGE("%s: enter", __func__);
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->getMasterMono(mono);
@@ -1219,6 +1278,7 @@ status_t AudioSystem::getMasterMono(bool *mono)
 int AudioSystem::AudioPolicyServiceClient::addAudioPortCallback(
         const sp<AudioPortCallback>& callback)
 {
+    ALOGE("%s: enter", __func__);
     Mutex::Autolock _l(mLock);
     for (size_t i = 0; i < mAudioPortCallbacks.size(); i++) {
         if (mAudioPortCallbacks[i] == callback) {
@@ -1232,6 +1292,7 @@ int AudioSystem::AudioPolicyServiceClient::addAudioPortCallback(
 int AudioSystem::AudioPolicyServiceClient::removeAudioPortCallback(
         const sp<AudioPortCallback>& callback)
 {
+    ALOGE("%s: enter", __func__);
     Mutex::Autolock _l(mLock);
     size_t i;
     for (i = 0; i < mAudioPortCallbacks.size(); i++) {
@@ -1249,6 +1310,7 @@ int AudioSystem::AudioPolicyServiceClient::removeAudioPortCallback(
 
 void AudioSystem::AudioPolicyServiceClient::onAudioPortListUpdate()
 {
+    ALOGE("%s: enter", __func__);
     Mutex::Autolock _l(mLock);
     for (size_t i = 0; i < mAudioPortCallbacks.size(); i++) {
         mAudioPortCallbacks[i]->onAudioPortListUpdate();
@@ -1257,6 +1319,7 @@ void AudioSystem::AudioPolicyServiceClient::onAudioPortListUpdate()
 
 void AudioSystem::AudioPolicyServiceClient::onAudioPatchListUpdate()
 {
+    ALOGE("%s: enter", __func__);
     Mutex::Autolock _l(mLock);
     for (size_t i = 0; i < mAudioPortCallbacks.size(); i++) {
         mAudioPortCallbacks[i]->onAudioPatchListUpdate();
@@ -1266,6 +1329,7 @@ void AudioSystem::AudioPolicyServiceClient::onAudioPatchListUpdate()
 void AudioSystem::AudioPolicyServiceClient::onDynamicPolicyMixStateUpdate(
         String8 regId, int32_t state)
 {
+    ALOGE("%s: enter", __func__);
     ALOGV("AudioPolicyServiceClient::onDynamicPolicyMixStateUpdate(%s, %d)", regId.string(), state);
     dynamic_policy_callback cb = NULL;
     {
@@ -1282,6 +1346,7 @@ void AudioSystem::AudioPolicyServiceClient::onRecordingConfigurationUpdate(
         int event, audio_session_t session, audio_source_t source,
         const audio_config_base_t *clientConfig, const audio_config_base_t *deviceConfig,
         audio_patch_handle_t patchHandle) {
+    ALOGE("%s: enter", __func__);
     record_config_callback cb = NULL;
     {
         Mutex::Autolock _l(AudioSystem::gLock);
@@ -1321,6 +1386,7 @@ void AudioSystem::AudioPolicyServiceClient::onOutputSessionEffectsUpdate(
 
 void AudioSystem::AudioPolicyServiceClient::binderDied(const wp<IBinder>& who __unused)
 {
+    ALOGE("%s: enter", __func__);
     {
         Mutex::Autolock _l(mLock);
         for (size_t i = 0; i < mAudioPortCallbacks.size(); i++) {
