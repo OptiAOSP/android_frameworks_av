@@ -105,10 +105,11 @@ bool recordingAllowed(const String16& opPackageName, pid_t pid, uid_t uid) {
     return true;
 }
 
-bool captureAudioOutputAllowed(pid_t pid, uid_t uid) {
+bool captureAudioOutputAllowed() {
     if (getpid_cached == IPCThreadState::self()->getCallingPid()) return true;
     static const String16 sCaptureAudioOutput("android.permission.CAPTURE_AUDIO_OUTPUT");
-    bool ok = checkPermission(sCaptureAudioOutput, pid, uid);
+    // IMPORTANT: Use PermissionCache - not a runtime permission and may not change.
+    bool ok = PermissionCache::checkCallingPermission(sCaptureAudioOutput);
     if (!ok) ALOGE("Request requires android.permission.CAPTURE_AUDIO_OUTPUT");
     return ok;
 }

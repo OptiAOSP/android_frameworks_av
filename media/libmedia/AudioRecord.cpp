@@ -533,8 +533,7 @@ status_t AudioRecord::openRecord_l(const Modulo<uint32_t> &epoch, const String16
     status = AudioSystem::getInputForAttr(&mAttributes, &input,
                                         mSessionId,
                                         // FIXME compare to AudioTrack
-                                        mClientPid,
-                                        mClientUid,
+                                        IPCThreadState::self()->getCallingUid(),
                                         mSampleRate, mFormat, mChannelMask,
                                         mFlags, mSelectedDeviceId);
 

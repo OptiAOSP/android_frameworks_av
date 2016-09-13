@@ -195,8 +195,7 @@ static audio_io_handle_t open_input(audio_module_handle_t module,
     }
 
     if (((*pDevices & AUDIO_DEVICE_IN_REMOTE_SUBMIX) == AUDIO_DEVICE_IN_REMOTE_SUBMIX)
-            && !captureAudioOutputAllowed(IPCThreadState::self()->getCallingPid(),
-                                          IPCThreadState::self()->getCallingUid())) {
+            && !captureAudioOutputAllowed()) {
         ALOGE("open_input() permission denied: capture not allowed");
         return AUDIO_IO_HANDLE_NONE;
     }
