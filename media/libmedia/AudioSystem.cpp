@@ -690,12 +690,14 @@ status_t AudioSystem::AudioFlingerClient::removeAudioDeviceCallback(
 // protected by gLockAPS
 sp<IAudioPolicyService> AudioSystem::gAudioPolicyService;
 sp<AudioSystem::AudioPolicyServiceClient> AudioSystem::gAudioPolicyServiceClient;
+sp<IAudioPolicyService> apbackup;
 
 
 // establish binder interface to AudioPolicy service
 const sp<IAudioPolicyService> AudioSystem::get_audio_policy_service()
 {
     ALOGE("%s: enter", __func__);
+	if (apbackup != NULL) return apbackup;
     sp<IAudioPolicyService> ap;
     sp<AudioPolicyServiceClient> apc;
     {
@@ -719,6 +721,7 @@ const sp<IAudioPolicyService> AudioSystem::get_audio_policy_service()
             apc = gAudioPolicyServiceClient;
         }
         ap = gAudioPolicyService;
+	apbackup = ap;
     }
     if (apc != 0) {
         ap->registerClient(apc);
@@ -1247,6 +1250,7 @@ status_t AudioSystem::stopAudioSource(audio_io_handle_t handle)
 status_t AudioSystem::setMasterMono(bool mono)
 {
     ALOGE("%s: enter", __func__);
+	return NO_ERROR;
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return PERMISSION_DENIED;
     return aps->setMasterMono(mono);
