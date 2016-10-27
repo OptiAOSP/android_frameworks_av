@@ -857,13 +857,21 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
         if (err == OK) {
             const IOMX::PortMode &mode = mPortMode[portIndex];
             size_t bufSize = def.nBufferSize;
+#ifndef METADATA_CAMERA_SOURCE
             // Always allocate VideoNativeMetadata if using ANWBuffer.
             // OMX might use gralloc source internally, but we don't share
             // metadata buffer with OMX, OMX has its own headers.
             if (mode == IOMX::kPortModeDynamicANWBuffer) {
+#else
+            if (mode == IOMX::kPortModeDynamicANWBuffer) {
+                bufSize = sizeof(VideoGrallocMetadata);
+            } else if (mode == IOMX::kPortModeDynamicANWBuffer) {
+#endif
                 bufSize = sizeof(VideoNativeMetadata);
+#ifndef METADATA_CAMERA_SOURCE
             } else if (mode == IOMX::kPortModeDynamicNativeHandle) {
                 bufSize = sizeof(VideoNativeHandleMetadata);
+#endif
             }
 
             size_t conversionBufferSize = 0;
@@ -1769,9 +1777,16 @@ status_t ACodec::configureCodec(
     }
 
     int32_t storeMeta;
+#ifndef METADATA_CAMERA_SOURCE
     if (encoder
             && msg->findInt32("android._input-metadata-buffer-type", &storeMeta)
             && storeMeta != kMetadataBufferTypeInvalid) {
+#else
+    if (encoder
+            && msg->findInt32("store-metadata-in-buffers", &storeMeta)
+            && storeMeta != 0) {
+#warning TODO: implement kMetadataBufferTypeGrallocSource handling here
+#endif
         IOMX::PortMode mode;
         if (storeMeta == kMetadataBufferTypeNativeHandleSource) {
             mode = IOMX::kPortModeDynamicNativeHandle;
@@ -1826,12 +1841,18 @@ status_t ACodec::configureCodec(
     mIsVideo = video;
     if (encoder && video) {
         OMX_BOOL enable = (OMX_BOOL) (prependSPSPPS
+#ifndef METADATA_CAMERA_SOURCE
             && msg->findInt32("android._store-metadata-in-buffers-output", &storeMeta)
+#else
+            && msg->findInt32("store-metadata-in-buffers-output", &storeMeta)
+#endif
             && storeMeta != 0);
         if (mFlags & kFlagIsSecure) {
             enable = OMX_TRUE;
         }
-
+#ifdef METADATA_CAMERA_SOURCE
+#warning TODO: implement kMetadataBufferTypeGrallocSource handling here
+#endif
         err = setPortMode(kPortIndexOutput, enable ?
                 IOMX::kPortModePresetSecureBuffer : IOMX::kPortModePresetByteBuffer);
         if (err != OK) {

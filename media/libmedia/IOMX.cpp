@@ -228,6 +228,9 @@ public:
 
     virtual status_t setPortMode(
             OMX_U32 port_index, IOMX::PortMode mode) {
+#ifdef METADATE_CAMERA_SOURCE
+#warning storeMetaDataInBuffers changes are not implemented here
+#endif
         Parcel data, reply;
         data.writeInterfaceToken(IOMXNode::getInterfaceDescriptor());
         data.writeInt32(port_index);

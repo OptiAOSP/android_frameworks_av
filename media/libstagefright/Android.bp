@@ -139,6 +139,7 @@ cc_library_shared {
         "-Wno-error=deprecated-declarations",
         "-Wall",
         "-DBOARD_CANT_REALLOCATE_OMX_BUFFERS",
+        "-DMETADATA_CAMERA_SOURCE",
     ],
 
     product_variables: {
