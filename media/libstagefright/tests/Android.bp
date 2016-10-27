@@ -28,7 +28,6 @@ cc_test {
         "frameworks/av/media/libstagefright",
         "frameworks/av/media/libstagefright/include",
         "frameworks/native/include/media/openmax",
-        "frameworks/native/include/media/hardware",
     ],
 
     cflags: [

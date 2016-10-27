@@ -24,7 +24,9 @@
 #include <utils/RefBase.h>
 #include <utils/threads.h>
 #include <utils/KeyedVector.h>
+#ifndef METADATA_CAMERA_SOURCE
 #include <utils/SortedVector.h>
+#endif
 #include "OmxNodeOwner.h"
 
 #include <android/hidl/memory/1.0/IMemory.h>
@@ -127,9 +129,11 @@ private:
     sp<IOMXObserver> mObserver;
     sp<CallbackDispatcher> mDispatcher;
     std::atomic_bool mDying;
+#ifndef METADATA_CAMERA_SOURCE
     bool mSailed;  // configuration is set (no more meta-mode changes)
     bool mQueriedProhibitedExtensions;
     SortedVector<OMX_INDEXTYPE> mProhibitedExtensions;
+#endif
     bool mIsSecure;
     uint32_t mQuirks;
 
@@ -193,9 +197,9 @@ private:
     OMX_BUFFERHEADERTYPE *findBufferHeader(IOMX::buffer_id buffer, OMX_U32 portIndex);
     IOMX::buffer_id findBufferID(OMX_BUFFERHEADERTYPE *bufferHeader);
     void invalidateBufferID(IOMX::buffer_id buffer);
-
+#ifndef METADATA_CAMERA_SOURCE
     bool isProhibitedIndex_l(OMX_INDEXTYPE index);
-
+#endif
     status_t useBuffer_l(
             OMX_U32 portIndex, const sp<IMemory> &params,
             const sp<IHidlMemory> &hParams, IOMX::buffer_id *buffer);

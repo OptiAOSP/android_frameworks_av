@@ -493,6 +493,11 @@ status_t MediaCodecSource::initEncoder() {
     mCodecLooper = new ALooper;
     mCodecLooper->setName("codec_looper");
     mCodecLooper->start();
+#ifdef METADATA_CAMERA_SOURCE
+    if (mFlags & FLAG_USE_METADATA_INPUT) {
+        mOutputFormat->setInt32("store-metadata-in-buffers", 1);
+    }
+#endif
 
     if (mFlags & FLAG_USE_SURFACE_INPUT) {
         mOutputFormat->setInt32("create-input-buffers-suspended", 1);
