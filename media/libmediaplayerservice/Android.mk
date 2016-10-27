@@ -56,8 +56,13 @@ LOCAL_C_INCLUDES :=                                                 \
     $(LOCAL_PATH)/include/media                              \
     $(TOP)/frameworks/av/include/camera                             \
     $(TOP)/frameworks/native/include/media/openmax                  \
-    $(TOP)/frameworks/native/include/media/hardware                 \
     $(TOP)/external/tremolo/Tremolo                                 \
+
+
+ifneq ($(TARGET_HAS_LEGACY_CAMERA_HAL1), true)
+LOCAL_C_INCLUDES += \
+    $(TOP)/frameworks/native/include/media/hardware
+endif
 
 LOCAL_CFLAGS += -Wno-error=deprecated-declarations -Wall
 
