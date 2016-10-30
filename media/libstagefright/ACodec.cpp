@@ -41,7 +41,6 @@
 #include <media/stagefright/MediaCodecList.h>
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/OMXClient.h>
-#include <media/stagefright/OMXCodec.h>
 #include <media/stagefright/PersistentSurface.h>
 #include <media/stagefright/SurfaceUtils.h>
 #include <media/stagefright/FFMPEGSoftCodec.h>
@@ -618,6 +617,20 @@ void ACodec::initiateStart() {
     (new AMessage(kWhatStart, this))->post();
 }
 
+#ifdef STE_HARDWARE
+uint32_t ACodec::OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue) {
+    switch (omxValue) {
+        case OMX_STE_COLOR_FormatYUV420PackedSemiPlanarMB:
+            return HAL_PIXEL_FORMAT_YCBCR42XMBN;
+        case OMX_COLOR_FormatYUV420Planar:
+            return HAL_PIXEL_FORMAT_YCbCr_420_P;
+        default:
+            ALOGI("Unknown OMX pixel format (0x%X), passing it on unchanged", omxValue);
+            return omxValue;
+    }
+}
+#endif
+
 void ACodec::signalFlush() {
     ALOGV("[%s] signalFlush", mComponentName.c_str());
     (new AMessage(kWhatFlush, this))->post();
@@ -956,7 +969,7 @@ status_t ACodec::setupNativeWindowSizeFormatAndUsage(
             eNativeColorFormat,
 #else
 #ifdef STE_HARDWARE
-            OMXCodec::OmxToHALFormat(def.format.video.eColorFormat),
+            ACodec::OmxToHALFormat(def.format.video.eColorFormat),
 #else
             def.format.video.eColorFormat,
 #endif
@@ -5914,14 +5927,17 @@ bool ACodec::LoadedState::onConfigureComponent(
         ALOGE("[%s] configureCodec returning error %d",
               mCodec->mComponentName.c_str(), err);
 
-        if (!mCodec->mEncoderComponent && !mCodec->mComponentAllocByName &&
-            !strncmp(mime.c_str(), "video/", strlen("video/"))) {
-            Vector<OMXCodec::CodecNameAndQuirks> matchingCodecs;
+        int32_t encoder;
+        if (!msg->findInt32("encoder", &encoder)) {
+            encoder = false;
+        }
 
-            OMXCodec::findMatchingCodecs(
+        if (!encoder && !strncmp(mime.c_str(), "video/", strlen("video/"))) {
+            Vector<AString> matchingCodecs;
+
+            MediaCodecList::findMatchingCodecs(
                 mime.c_str(),
-                false, // createEncoder
-                NULL,  // matchComponentName
+                encoder, // createEncoder
                 0,     // flags
                 &matchingCodecs);
 
@@ -5940,7 +5956,7 @@ bool ACodec::LoadedState::onConfigureComponent(
             err = NAME_NOT_FOUND;
             for (size_t matchIndex = 0; matchIndex < matchingCodecs.size();
                     ++matchIndex) {
-                componentName = matchingCodecs.itemAt(matchIndex).mName.string();
+                componentName = matchingCodecs.itemAt(matchIndex);
                 if (!strcmp(mCodec->mComponentName.c_str(), componentName.c_str())) {
                     continue;
                 }
