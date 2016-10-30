@@ -768,7 +768,7 @@ status_t MediaCodecList::initializeCapabilities(const char *type) {
         return UNKNOWN_ERROR;
     }
 
-    return mCurrentInfo->initializeCapabilities(caps);
+    return mCurrentInfo->setCapabilities(caps);
 }
 
 status_t MediaCodecList::addQuirk(const char **attrs) {
