@@ -19,7 +19,6 @@
 
 #include <media/stagefright/foundation/ABase.h>
 #include <media/stagefright/foundation/AHandlerReflector.h>
-#include <media/stagefright/foundation/Mutexed.h>
 #include <media/stagefright/MediaSource.h>
 
 #include <gui/IGraphicBufferConsumer.h>
@@ -78,7 +77,6 @@ private:
         kWhatStart,
         kWhatStop,
         kWhatPause,
-        kWhatStopStalled,
     };
 
     MediaCodecSource(
@@ -126,16 +124,12 @@ private:
     int64_t mFirstSampleTimeUs;
     List<int64_t> mDriftTimeQueue;
 
-    struct Output {
-        Output();
-        List<MediaBuffer*> mBufferQueue;
-        bool mEncoderReachedEOS;
-        status_t mErrorCode;
-        Condition mCond;
-    };
-    Mutexed<Output> mOutput;
-
-    int32_t mGeneration;
+    // following variables are protected by mOutputBufferLock
+    Mutex mOutputBufferLock;
+    Condition mOutputBufferCond;
+    List<MediaBuffer*> mOutputBufferQueue;
+    bool mEncoderReachedEOS;
+    status_t mErrorCode;
 
     DISALLOW_EVIL_CONSTRUCTORS(MediaCodecSource);
 };
