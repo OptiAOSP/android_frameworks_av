@@ -446,7 +446,7 @@ status_t MediaCodecSource::initEncoder() {
     status_t err = NO_INIT;
     for (size_t ix = 0; ix < matchingCodecs.size(); ++ix) {
         mEncoder = MediaCodec::CreateByComponentName(
-                mCodecLooper, matchingCodecs[ix]);
+                mCodecLooper, matchingCodecs[ix].c_str());
 
         if (mEncoder == NULL) {
             continue;

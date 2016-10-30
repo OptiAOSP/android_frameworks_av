@@ -63,7 +63,7 @@ sp<SimpleDecodingSource> SimpleDecodingSource::Create(
 
         ALOGV("Attempting to allocate codec '%s'", componentName.c_str());
 
-        codec = MediaCodec::CreateByComponentName(looper, componentName);
+        codec = MediaCodec::CreateByComponentName(looper, componentName.c_str());
         if (codec != NULL) {
             ALOGI("Successfully allocated codec '%s'", componentName.c_str());
 
