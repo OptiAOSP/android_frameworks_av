@@ -755,10 +755,16 @@ status_t AudioSystem::setPhoneState(audio_mode_t state)
 
 status_t AudioSystem::setForceUse(audio_policy_force_use_t usage, audio_policy_forced_cfg_t config)
 {
-    ALOGE("%s: enter", __func__);
+    status_t ret = 0;
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
-    if (aps == 0) return PERMISSION_DENIED;
-    return aps->setForceUse(usage, config);
+    if (aps == 0)
+	 ret  = PERMISSION_DENIED;
+
+    if (ret == 0) ret = aps->setForceUse(usage, config);
+
+    ALOGE("%s: usage=%d, config=%d, ret=%d", __func__, usage, config, ret);
+    
+    return ret;
 }
 
 audio_policy_forced_cfg_t AudioSystem::getForceUse(audio_policy_force_use_t usage)
