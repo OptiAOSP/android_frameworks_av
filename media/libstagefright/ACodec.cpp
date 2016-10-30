@@ -632,6 +632,20 @@ void ACodec::initiateStart() {
     (new AMessage(kWhatStart, this))->post();
 }
 
+#ifdef STE_HARDWARE
+uint32_t ACodec::OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue) {
+    switch (omxValue) {
+        case OMX_STE_COLOR_FormatYUV420PackedSemiPlanarMB:
+            return HAL_PIXEL_FORMAT_YCBCR42XMBN;
+        case OMX_COLOR_FormatYUV420Planar:
+            return HAL_PIXEL_FORMAT_YCbCr_420_P;
+        default:
+            ALOGI("Unknown OMX pixel format (0x%X), passing it on unchanged", omxValue);
+            return omxValue;
+    }
+}
+#endif
+
 void ACodec::signalFlush() {
     ALOGV("[%s] signalFlush", mComponentName.c_str());
     (new AMessage(kWhatFlush, this))->post();
@@ -1024,7 +1038,7 @@ status_t ACodec::setupNativeWindowSizeFormatAndUsage(
             eNativeColorFormat,
 #else
 #ifdef STE_HARDWARE
-            OMXCodec::OmxToHALFormat(def.format.video.eColorFormat),
+            ACodec::OmxToHALFormat(def.format.video.eColorFormat),
 #else
             def.format.video.eColorFormat,
 #endif

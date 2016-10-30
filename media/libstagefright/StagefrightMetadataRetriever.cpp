@@ -169,7 +169,7 @@ static VideoFrame *extractVideoFrame(
     sp<ALooper> looper = new ALooper;
     looper->start();
     sp<MediaCodec> decoder = MediaCodec::CreateByComponentName(
-            looper, componentName, &err);
+            looper, componentName.c_str(), &err);
 
     if (decoder.get() == NULL || err != OK) {
         ALOGW("Failed to instantiate decoder [%s]", componentName.c_str());

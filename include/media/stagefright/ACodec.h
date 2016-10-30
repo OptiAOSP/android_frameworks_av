@@ -55,6 +55,10 @@ struct ACodec : public AHierarchicalStateMachine, public CodecBase {
     virtual void initiateStart();
     virtual void initiateShutdown(bool keepComponentAllocated = false);
 
+#ifdef STE_HARDWARE
+    static uint32_t OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue);
+#endif
+
     virtual status_t queryCapabilities(
             const AString &name, const AString &mime, bool isEncoder,
             sp<MediaCodecInfo::Capabilities> *caps);
