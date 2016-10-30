@@ -1639,21 +1639,6 @@ ACodec::BufferInfo *ACodec::findBufferByID(
 
 status_t ACodec::setComponentRole(
         bool isEncoder, const char *mime) {
-    const char *role = getComponentRole(isEncoder, mime);
-    if (role == NULL) {
-        return BAD_VALUE;
-    }
-    status_t err = setComponentRole(mOMX, mNode, role);
-    if (err != OK) {
-        ALOGW("[%s] Failed to set standard component role '%s'.",
-             mComponentName.c_str(), role);
-    }
-    return err;
-}
-
-//static
-const char *ACodec::getComponentRole(
-        bool isEncoder, const char *mime) {
     struct MimeToRole {
         const char *mime;
         const char *decoderRole;
@@ -1720,27 +1705,35 @@ const char *ACodec::getComponentRole(
     }
 
     if (i == kNumMimeToRole) {
-        return NULL;
+        return FFMPEGSoftCodec::setSupportedRole(mOMX, mNode, isEncoder, mime);
     }
 
-    return isEncoder ? kMimeToRole[i].encoderRole
+    const char *role =
+        isEncoder ? kMimeToRole[i].encoderRole
                   : kMimeToRole[i].decoderRole;
-}
 
-//static
-status_t ACodec::setComponentRole(
-        const sp<IOMX> &omx, IOMX::node_id node, const char *role) {
-    OMX_PARAM_COMPONENTROLETYPE roleParams;
-    InitOMXParams(&roleParams);
+    if (role != NULL) {
+        OMX_PARAM_COMPONENTROLETYPE roleParams;
+        InitOMXParams(&roleParams);
 
-    strncpy((char *)roleParams.cRole,
-            role, OMX_MAX_STRINGNAME_SIZE - 1);
+        strncpy((char *)roleParams.cRole,
+                role, OMX_MAX_STRINGNAME_SIZE - 1);
 
-    roleParams.cRole[OMX_MAX_STRINGNAME_SIZE - 1] = '\0';
+        roleParams.cRole[OMX_MAX_STRINGNAME_SIZE - 1] = '\0';
 
-    return omx->setParameter(
-            node, OMX_IndexParamStandardComponentRole,
-            &roleParams, sizeof(roleParams));
+        status_t err = mOMX->setParameter(
+                mNode, OMX_IndexParamStandardComponentRole,
+                &roleParams, sizeof(roleParams));
+
+        if (err != OK) {
+            ALOGW("[%s] Failed to set standard component role '%s'.",
+                 mComponentName.c_str(), role);
+
+            return err;
+        }
+    }
+
+    return OK;
 }
 
 status_t ACodec::configureCodec(

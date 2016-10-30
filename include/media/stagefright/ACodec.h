@@ -56,10 +56,6 @@ struct ACodec : public AHierarchicalStateMachine, public CodecBase {
     static uint32_t OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue);
 #endif
 
-    virtual status_t queryCapabilities(
-            const AString &name, const AString &mime, bool isEncoder,
-            sp<MediaCodecInfo::Capabilities> *caps);
-
     virtual status_t setSurface(const sp<Surface> &surface);
 
     virtual void signalFlush();
@@ -331,10 +327,6 @@ protected:
 
     virtual status_t setComponentRole(bool isEncoder, const char *mime);
     virtual status_t configureCodec(const char *mime, const sp<AMessage> &msg);
-    static const char *getComponentRole(bool isEncoder, const char *mime);
-    static status_t setComponentRole(
-            const sp<IOMX> &omx, IOMX::node_id node, const char *role);
-
 
     status_t configureTunneledVideoPlayback(int32_t audioHwSync,
             const sp<ANativeWindow> &nativeWindow);
