@@ -141,7 +141,7 @@ ifeq ($(BOARD_USE_SAMSUNG_CAMERAFORMAT_NV21), true)
 LOCAL_CFLAGS += -DUSE_SAMSUNG_CAMERAFORMAT_NV21
 endif
 
-LOCAL_CFLAGS += -Wno-multichar -Werror -Wno-error=deprecated-declarations -Wall
+LOCAL_CFLAGS += -Wno-multichar -Wno-error=deprecated-declarations -Wall
 
 LOCAL_C_INCLUDES += $(call project-path-for,qcom-media)/mm-core/inc
 

@@ -72,6 +72,8 @@ endif
 endif
 #QTI Resampler
 
+LOCAL_CFLAGS += -Os
+
 LOCAL_MODULE:= libaudioflinger
 
 LOCAL_SRC_FILES += \
