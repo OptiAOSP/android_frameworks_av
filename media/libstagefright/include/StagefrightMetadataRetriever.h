@@ -20,6 +20,7 @@
 
 #include <media/MediaMetadataRetrieverInterface.h>
 
+#include <media/stagefright/OMXClient.h>
 #include <utils/KeyedVector.h>
 
 namespace android {
@@ -44,6 +45,7 @@ struct StagefrightMetadataRetriever : public MediaMetadataRetrieverInterface {
     virtual const char *extractMetadata(int keyCode);
 
 private:
+    OMXClient mClient;
     sp<DataSource> mSource;
     sp<MediaExtractor> mExtractor;
 

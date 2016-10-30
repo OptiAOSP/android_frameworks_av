@@ -44,6 +44,7 @@
 #include <media/stagefright/MediaCodecSource.h>
 #include <media/stagefright/SurfaceMediaSource.h>
 #include <media/stagefright/OMXClient.h>
+#include <media/stagefright/OMXCodec.h>
 #include <media/stagefright/WAVEWriter.h>
 #include <media/MediaProfiles.h>
 #include <camera/ICamera.h>
@@ -1292,6 +1293,19 @@ void StagefrightRecorder::clipVideoFrameWidth() {
 }
 
 status_t StagefrightRecorder::checkVideoEncoderCapabilities() {
+    /* hardware codecs must support camera source meta data mode */
+    Vector<CodecCapabilities> codecs;
+    OMXClient client;
+    CHECK_EQ(client.connect(), (status_t)OK);
+    QueryCodecs(
+            client.interface(),
+            (mVideoEncoder == VIDEO_ENCODER_H263 ? MEDIA_MIMETYPE_VIDEO_H263 :
+             mVideoEncoder == VIDEO_ENCODER_MPEG_4_SP ? MEDIA_MIMETYPE_VIDEO_MPEG4 :
+             mVideoEncoder == VIDEO_ENCODER_VP8 ? MEDIA_MIMETYPE_VIDEO_VP8 :
+             mVideoEncoder == VIDEO_ENCODER_H264 ? MEDIA_MIMETYPE_VIDEO_AVC :
+             mVideoEncoder == VIDEO_ENCODER_H265 ? MEDIA_MIMETYPE_VIDEO_HEVC : ""),
+            false /* decoder */, true /* hwCodec */, &codecs);
+
     if (!mCaptureFpsEnable) {
         // Dont clip for time lapse capture as encoder will have enough
         // time to encode because of slow capture rate of time lapse.
