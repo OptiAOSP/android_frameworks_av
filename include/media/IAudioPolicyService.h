@@ -167,9 +167,6 @@ public:
                                       audio_io_handle_t *handle) = 0;
     virtual status_t stopAudioSource(audio_io_handle_t handle) = 0;
 
-    virtual status_t setMasterMono(bool mono) = 0;
-    virtual status_t getMasterMono(bool *mono) = 0;
-
     virtual status_t listAudioSessions(audio_stream_type_t streams,
                                        Vector< sp<AudioSessionInfo>> &sessions) = 0;
 };

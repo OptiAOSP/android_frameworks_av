@@ -336,8 +336,6 @@ public:
                                       audio_io_handle_t *handle);
     static status_t stopAudioSource(audio_io_handle_t handle);
 
-    static status_t setMasterMono(bool mono);
-    static status_t getMasterMono(bool *mono);
 
     static status_t listAudioSessions(audio_stream_type_t streams,
                                       Vector< sp<AudioSessionInfo>> &sessions);

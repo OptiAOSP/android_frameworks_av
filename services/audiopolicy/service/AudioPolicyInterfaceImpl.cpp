@@ -606,14 +606,7 @@ status_t AudioPolicyService::queryDefaultPreProcessing(audio_session_t audioSess
 
 bool AudioPolicyService::isOffloadSupported(const audio_offload_info_t& info)
 {
-    if (mAudioPolicyManager == NULL) {
-        ALOGV("mAudioPolicyManager == NULL");
         return false;
-    }
-    Mutex::Autolock _l(mLock);
-    Mutex::Autolock _le(mEffectsLock); // isOffloadSupported queries for
-                                      // non-offloadable effects
-    return mAudioPolicyManager->isOffloadSupported(info);
 }
 
 status_t AudioPolicyService::listAudioPorts(audio_port_role_t role,
@@ -752,6 +745,7 @@ status_t AudioPolicyService::stopAudioSource(audio_io_handle_t handle)
     return mAudioPolicyManager->stopAudioSource(handle);
 }
 
+<<<<<<< HEAD
 status_t AudioPolicyService::setMasterMono(bool mono)
 {
     if (mAudioPolicyManager == NULL) {
@@ -794,4 +788,6 @@ status_t AudioPolicyService::listAudioSessions(audio_stream_type_t streams,
 }
 
 
+=======
+>>>>>>> parent of 2ddee19... Add setMasterMono and getMasterMono
 }; // namespace android

@@ -17,7 +17,6 @@
 #ifndef ANDROID_AUDIO_FAST_MIXER_H
 #define ANDROID_AUDIO_FAST_MIXER_H
 
-#include <atomic>
 #include "FastThread.h"
 #include "StateQueue.h"
 #include "FastMixerState.h"
@@ -37,7 +36,6 @@ public:
 
             FastMixerStateQueue* sq();
 
-    virtual void setMasterMono(bool mono) { mMasterMono.store(mono); /* memory_order_seq_cst */ }
     virtual void setBoottimeOffset(int64_t boottimeOffset) {
         mBoottimeOffset.store(boottimeOffset); /* memory_order_seq_cst */
     }
@@ -86,8 +84,6 @@ private:
     ExtendedTimestamp mTimestamp;
     int64_t         mNativeFramesWrittenButNotPresented;
 
-    // accessed without lock between multiple threads.
-    std::atomic_bool mMasterMono;
     std::atomic_int_fast64_t mBoottimeOffset;
 };  // class FastMixer
 

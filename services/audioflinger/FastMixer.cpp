@@ -37,7 +37,6 @@
 #include <cpustats/ThreadCpuUsage.h>
 #endif
 #endif
-#include <audio_utils/conversion.h>
 #include <audio_utils/format.h>
 #include "AudioMixer.h"
 #include "FastMixer.h"
@@ -64,8 +63,7 @@ FastMixer::FastMixer() : FastThread(),
     mFastTracksGen(0),
     mTotalNativeFramesWritten(0),
     // timestamp
-    mNativeFramesWrittenButNotPresented(0),   // the = 0 is to silence the compiler
-    mMasterMono(false)
+    mNativeFramesWrittenButNotPresented(0)   // the = 0 is to silence the compiler
 {
     // FIXME pass sInitial as parameter to base class constructor, and make it static local
     mPrevious = &sInitial;
@@ -430,11 +428,6 @@ void FastMixer::onWork()
         if (mMixerBufferState == UNDEFINED) {
             memset(mMixerBuffer, 0, mMixerBufferSize);
             mMixerBufferState = ZEROED;
-        }
-
-        if (mMasterMono.load()) {  // memory_order_seq_cst
-            mono_blend(mMixerBuffer, mMixerBufferFormat, Format_channelCount(mFormat), frameCount,
-                    true /*limit*/);
         }
         // prepare the buffer used to write to sink
         void *buffer = mSinkBuffer != NULL ? mSinkBuffer : mMixerBuffer;

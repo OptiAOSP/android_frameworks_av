@@ -74,8 +74,6 @@ enum {
     START_AUDIO_SOURCE,
     STOP_AUDIO_SOURCE,
     SET_AUDIO_PORT_CALLBACK_ENABLED,
-    SET_MASTER_MONO,
-    GET_MASTER_MONO,
     LIST_AUDIO_SESSIONS,
 };
 
@@ -773,37 +771,6 @@ public:
         return status;
     }
 
-    virtual status_t setMasterMono(bool mono)
-    {
-        Parcel data, reply;
-        data.writeInterfaceToken(IAudioPolicyService::getInterfaceDescriptor());
-        data.writeInt32(static_cast<int32_t>(mono));
-        status_t status = remote()->transact(SET_MASTER_MONO, data, &reply);
-        if (status != NO_ERROR) {
-            return status;
-        }
-        return static_cast<status_t>(reply.readInt32());
-    }
-
-    virtual status_t getMasterMono(bool *mono)
-    {
-        if (mono == nullptr) {
-            return BAD_VALUE;
-        }
-        Parcel data, reply;
-        data.writeInterfaceToken(IAudioPolicyService::getInterfaceDescriptor());
-
-        status_t status = remote()->transact(GET_MASTER_MONO, data, &reply);
-        if (status != NO_ERROR) {
-            return status;
-        }
-        status = static_cast<status_t>(reply.readInt32());
-        if (status == NO_ERROR) {
-            *mono = static_cast<bool>(reply.readInt32());
-        }
-        return status;
-    }
-
     virtual status_t listAudioSessions(audio_stream_type_t streams,
                                        Vector< sp<AudioSessionInfo>> &sessions)
     {
@@ -1385,25 +1352,6 @@ status_t BnAudioPolicyService::onTransact(
             audio_io_handle_t handle = (audio_io_handle_t)data.readInt32();
             status_t status = stopAudioSource(handle);
             reply->writeInt32(status);
-            return NO_ERROR;
-        } break;
-
-        case SET_MASTER_MONO: {
-            CHECK_INTERFACE(IAudioPolicyService, data, reply);
-            bool mono = static_cast<bool>(data.readInt32());
-            status_t status = setMasterMono(mono);
-            reply->writeInt32(status);
-            return NO_ERROR;
-        } break;
-
-        case GET_MASTER_MONO: {
-            CHECK_INTERFACE(IAudioPolicyService, data, reply);
-            bool mono;
-            status_t status = getMasterMono(&mono);
-            reply->writeInt32(status);
-            if (status == NO_ERROR) {
-                reply->writeInt32(static_cast<int32_t>(mono));
-            }
             return NO_ERROR;
         } break;
 

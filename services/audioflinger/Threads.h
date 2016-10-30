@@ -407,8 +407,6 @@ protected:
                 String16 getWakeLockTag();
 
     virtual     void        preExit() { }
-    virtual     void        setMasterMono_l(bool mono __unused) { }
-    virtual     bool        requireMonoBlend() { return false; }
 
     friend class AudioFlinger;      // for mEffectChains
 
@@ -917,7 +915,6 @@ private:
                 //          mFastMixer->sq()    // for mutating and pushing state
                 int32_t     mFastMixerFutex;    // for cold idle
 
-                std::atomic_bool mMasterMono;
 public:
     virtual     bool        hasFastMixer() const { return mFastMixer != 0; }
     virtual     FastTrackUnderruns getFastTrackUnderruns(size_t fastIndex) const {
@@ -925,17 +922,6 @@ public:
                               return mFastMixerDumpState.mTracks[fastIndex].mUnderruns;
                             }
 
-protected:
-    virtual     void       setMasterMono_l(bool mono) {
-                               mMasterMono.store(mono);
-                               if (mFastMixer != nullptr) { /* hasFastMixer() */
-                                   mFastMixer->setMasterMono(mMasterMono);
-                               }
-                           }
-                // the FastMixer performs mono blend if it exists.
-                // Blending with limiter is not idempotent,
-                // and blending without limiter is idempotent but inefficient to do twice.
-    virtual     bool       requireMonoBlend() { return mMasterMono.load() && !hasFastMixer(); }
 };
 
 class DirectOutputThread : public PlaybackThread {
