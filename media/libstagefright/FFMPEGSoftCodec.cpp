@@ -32,6 +32,7 @@
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/MediaCodecList.h>
 #include <media/stagefright/MetaData.h>
+#include <media/stagefright/ACodec.h>
 #include <media/stagefright/OMXCodec.h>
 #include <media/stagefright/Utils.h>
 
@@ -1023,7 +1024,7 @@ status_t FFMPEGSoftCodec::setRawAudioFormat(
     pcmParams.nSamplingRate = sampleRate;
     pcmParams.ePCMMode = OMX_AUDIO_PCMModeLinear;
 
-    if (getOMXChannelMapping(numChannels, pcmParams.eChannelMapping) != OK) {
+    if (ACodec::getOMXChannelMapping(numChannels, pcmParams.eChannelMapping) != OK) {
         return OMX_ErrorNone;
     }
 

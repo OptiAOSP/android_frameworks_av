@@ -41,6 +41,7 @@
 #include <media/stagefright/MediaCodecList.h>
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/OMXClient.h>
+#include <media/stagefright/OMXCodec.h>
 #include <media/stagefright/PersistentSurface.h>
 #include <media/stagefright/SurfaceUtils.h>
 #include <media/stagefright/FFMPEGSoftCodec.h>

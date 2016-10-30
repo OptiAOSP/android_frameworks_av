@@ -95,7 +95,8 @@ namespace android {
 #define DEFAULT_SOC                 SOC_GENERIC
 #define DEFAULT_INTRA4x4            0
 #define STRLENGTH                   500
-#define DEFAULT_CONSTRAINED_INTRA   0
+
+
 
 #define MIN(a, b) ((a) < (b))? (a) : (b)
 #define MAX(a, b) ((a) > (b))? (a) : (b)
@@ -180,7 +181,6 @@ private:
     bool     mReconEnable;
     bool     mPSNREnable;
     bool     mEntropyMode;
-    bool     mConstrainedIntraFlag;
     IVE_SPEED_CONFIG     mEncSpeed;
 
     uint8_t *mConversionBuffers[MAX_CONVERSION_BUFFERS];
