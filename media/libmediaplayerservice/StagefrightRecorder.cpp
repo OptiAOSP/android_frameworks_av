@@ -44,6 +44,7 @@
 #include <media/stagefright/MediaCodecSource.h>
 #include <media/stagefright/SurfaceMediaSource.h>
 #include <media/stagefright/OMXClient.h>
+#include <media/stagefright/OMXCodec.h>
 #include <media/stagefright/WAVEWriter.h>
 #include <media/MediaProfiles.h>
 #include <camera/ICamera.h>
