@@ -50,7 +50,7 @@ LOCAL_MULTILIB := $(AUDIOSERVER_MULTILIB)
 LOCAL_MODULE:= libaudiopolicyservice
 
 LOCAL_CFLAGS += -fvisibility=hidden
-LOCAL_CFLAGS += -Wall -Werror
+LOCAL_CFLAGS += -Wall
 
 include $(BUILD_SHARED_LIBRARY)
 
@@ -103,7 +103,7 @@ LOCAL_SHARED_LIBRARIES += libicuuc
 LOCAL_CFLAGS += -DUSE_XML_AUDIO_POLICY_CONF
 endif #ifeq ($(USE_XML_AUDIO_POLICY_CONF), 1)
 
-LOCAL_CFLAGS += -Wall -Werror
+LOCAL_CFLAGS += -Wall
 
 LOCAL_MULTILIB := $(AUDIOSERVER_MULTILIB)
 
@@ -128,7 +128,7 @@ LOCAL_C_INCLUDES += \
     $(TOPDIR)frameworks/av/services/audiopolicy/common/include \
     $(TOPDIR)frameworks/av/services/audiopolicy/engine/interface
 
-LOCAL_CFLAGS := -Wall -Werror
+LOCAL_CFLAGS := -Wall
 
 LOCAL_MULTILIB := $(AUDIOSERVER_MULTILIB)
 

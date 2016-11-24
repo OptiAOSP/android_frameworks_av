@@ -16,7 +16,7 @@ LOCAL_C_INCLUDES:= \
         $(TOP)/frameworks/av/media/libstagefright \
         $(TOP)/frameworks/av/media/libstagefright/mpeg2ts \
 
-LOCAL_CFLAGS += -Wno-multichar -Werror
+LOCAL_CFLAGS += -Wno-multichar
 
 ifeq ($(TARGET_ENABLE_QC_AV_ENHANCEMENTS),true)
        LOCAL_CFLAGS += -DENABLE_AV_ENHANCEMENTS
