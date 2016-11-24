@@ -1300,7 +1300,7 @@ MetadataBufferType CameraSource::metaDataStoredInVideoBuffers() const {
     // Output buffers will contain metadata if camera sends us buffer in metadata mode or via
     // buffer queue.
     switch (mVideoBufferMode) {
-#ifndef EXYNOS4_ENHANCEMENTS
+#ifndef STE_SAMSUNG_HARDWARE
         case hardware::ICamera::VIDEO_BUFFER_MODE_DATA_CALLBACK_METADATA:
             return kMetadataBufferTypeNativeHandleSource;
 #endif
