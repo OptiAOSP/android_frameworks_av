@@ -200,3 +200,5 @@ void MediaBufferGroup::signalBufferReturned(MediaBuffer *) {
 }
 
 }  // namespace android
+
+__strong_alias(_ZN7android16MediaBufferGroupC1Ev,_ZN7android16MediaBufferGroupC1Ej);
