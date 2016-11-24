@@ -1126,10 +1126,17 @@ status_t OMXNodeInstance::createGraphicBufferSource(
     }
 
     if (def.format.video.eColorFormat != OMX_COLOR_FormatAndroidOpaque) {
+#ifdef STE_SCREEN_RECORD
+        // VC Encoder change OMX_COLOR_FormatAndroidOpaque to 0x7FA00000
+        if (def.format.video.eColorFormat != 0x7FA00000) {
+#endif
         CLOGW("createInputSurface requires COLOR_FormatSurface "
                 "(AndroidOpaque) color format instead of %s(%#x)",
                 asString(def.format.video.eColorFormat), def.format.video.eColorFormat);
         return INVALID_OPERATION;
+#ifdef STE_SCREEN_RECORD
+        }
+#endif
     }
 
     uint32_t usageBits;
