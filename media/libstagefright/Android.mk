@@ -14,6 +14,7 @@ LOCAL_SRC_FILES:=                         \
         CallbackDataSource.cpp            \
         CameraSource.cpp                  \
         CameraSourceTimeLapse.cpp         \
+        ClockEstimator.cpp                \
         CodecBase.cpp                     \
         DataConverter.cpp                 \
         DataSource.cpp                    \
@@ -59,6 +60,7 @@ LOCAL_SRC_FILES:=                         \
         SurfaceUtils.cpp                  \
         ThrottledSource.cpp               \
         TimedEventQueue.cpp               \
+        TimeSource.cpp                    \
         Utils.cpp                         \
         VBRISeeker.cpp                    \
         VideoFrameScheduler.cpp           \
