@@ -58,6 +58,7 @@
 #include <media/MemoryLeakTrackUtil.h>
 #include <media/stagefright/MediaCodecList.h>
 #include <media/stagefright/MediaErrors.h>
+#include <media/stagefright/AudioPlayer.h>
 #include <media/stagefright/Utils.h>
 #include <media/stagefright/foundation/ADebug.h>
 #include <media/stagefright/foundation/ALooperRoster.h>
@@ -75,6 +76,7 @@
 #include "MediaPlayerFactory.h"
 
 #include "TestPlayerStub.h"
+#include "StagefrightPlayer.h"
 #include "nuplayer/NuPlayerDriver.h"
 
 #include <OMX.h>

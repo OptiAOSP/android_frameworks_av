@@ -14,6 +14,7 @@ LOCAL_SRC_FILES:=               \
     MediaRecorderClient.cpp     \
     MetadataRetrieverClient.cpp \
     RemoteDisplay.cpp           \
+    StagefrightPlayer.cpp       \
     StagefrightRecorder.cpp     \
     TestPlayerStub.cpp          \
 
@@ -41,7 +42,6 @@ LOCAL_SHARED_LIBRARIES :=       \
 LOCAL_STATIC_LIBRARIES :=       \
     libstagefright_nuplayer     \
     libstagefright_rtsp         \
-    libstagefright_timedtext    \
 
 LOCAL_WHOLE_STATIC_LIBRARIES := \
     libavmediaserviceextensions \

@@ -46,7 +46,8 @@ public:
     };
 
     AudioPlayer(const sp<MediaPlayerBase::AudioSink> &audioSink,
-                uint32_t flags = 0);
+                uint32_t flags = 0,
+                AwesomePlayer *audioObserver = NULL);
 
     virtual ~AudioPlayer();
 
@@ -108,6 +109,7 @@ private:
     MediaBuffer *mFirstBuffer;
 
     sp<MediaPlayerBase::AudioSink> mAudioSink;
+    AwesomePlayer *mObserver;
     int64_t mPinnedTimeUs;
 
     bool mPlaying;

@@ -10,6 +10,7 @@ LOCAL_SRC_FILES:=                         \
         AMRWriter.cpp                     \
         AudioPlayer.cpp                   \
         AudioSource.cpp                   \
+        AwesomePlayer.cpp                 \
         CallbackDataSource.cpp            \
         CameraSource.cpp                  \
         CameraSourceTimeLapse.cpp         \
@@ -57,6 +58,7 @@ LOCAL_SRC_FILES:=                         \
         SurfaceMediaSource.cpp            \
         SurfaceUtils.cpp                  \
         ThrottledSource.cpp               \
+        TimedEventQueue.cpp               \
         Utils.cpp                         \
         VBRISeeker.cpp                    \
         VideoFrameScheduler.cpp           \

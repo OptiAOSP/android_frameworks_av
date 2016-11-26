@@ -34,11 +34,14 @@
 #include <media/stagefright/MetaData.h>
 #include <media/stagefright/Utils.h>
 
+#include "include/AwesomePlayer.h"
+
 namespace android {
 
 AudioPlayer::AudioPlayer(
         const sp<MediaPlayerBase::AudioSink> &audioSink,
-        uint32_t flags)
+        uint32_t flags,
+        AwesomePlayer *observer)
     : mInputBuffer(NULL),
       mSampleRate(0),
       mLatencyUs(0),
@@ -56,6 +59,7 @@ AudioPlayer::AudioPlayer(
       mFirstBufferResult(OK),
       mFirstBuffer(NULL),
       mAudioSink(audioSink),
+      mObserver(observer),
       mPinnedTimeUs(-1ll),
       mPlaying(false),
       mStartPosUs(0),
@@ -410,6 +414,11 @@ bool AudioPlayer::reachedEOS(status_t *finalStatus) {
 
 void AudioPlayer::notifyAudioEOS() {
     ALOGV("AudioPlayer@0x%p notifyAudioEOS", this);
+
+    if (mObserver != NULL) {
+        mObserver->postAudioEOS(0);
+        ALOGV("Notified observer of EOS!");
+    }
 }
 
 status_t AudioPlayer::setPlaybackRate(const AudioPlaybackRate &rate) {
@@ -452,6 +461,7 @@ size_t AudioPlayer::AudioSinkCallback(
 
     case MediaPlayerBase::AudioSink::CB_EVENT_TEAR_DOWN:
         ALOGV("AudioSinkCallback: Tear down event");
+        me->mObserver->postAudioTearDown();
         break;
     }
 
@@ -504,6 +514,10 @@ size_t AudioPlayer::fillBuffer(void *data, size_t size) {
         return 0;
     }
 
+    bool postSeekComplete = false;
+    bool postEOS = false;
+    int64_t postEOSDelayUs = 0;
+
     size_t size_done = 0;
     size_t size_remaining = size;
     while (size_remaining > 0) {
@@ -531,6 +545,9 @@ size_t AudioPlayer::fillBuffer(void *data, size_t size) {
                 }
 
                 mSeeking = false;
+                if (mObserver) {
+                    postSeekComplete = true;
+                }
             }
         }
 
@@ -563,6 +580,42 @@ size_t AudioPlayer::fillBuffer(void *data, size_t size) {
                             mAudioTrack->stop();
                         }
                     } else {
+                        if (mObserver) {
+                            // We don't want to post EOS right away but only
+                            // after all frames have actually been played out.
+
+                            // These are the number of frames submitted to the
+                            // AudioTrack that you haven't heard yet.
+                            uint32_t numFramesPendingPlayout =
+                                getNumFramesPendingPlayout();
+
+                            // These are the number of frames we're going to
+                            // submit to the AudioTrack by returning from this
+                            // callback.
+                            uint32_t numAdditionalFrames = size_done / mFrameSize;
+
+                            numFramesPendingPlayout += numAdditionalFrames;
+
+                            int64_t timeToCompletionUs =
+                                (1000000ll * numFramesPendingPlayout) / mSampleRate;
+
+                            ALOGV("total number of frames played: %" PRId64 " (%lld us)",
+                                    (mNumFramesPlayed + numAdditionalFrames),
+                                    1000000ll * (mNumFramesPlayed + numAdditionalFrames)
+                                        / mSampleRate);
+
+                            ALOGV("%d frames left to play, %" PRId64 " us (%.2f secs)",
+                                 numFramesPendingPlayout,
+                                 timeToCompletionUs, timeToCompletionUs / 1E6);
+
+                            postEOS = true;
+                            if (mAudioSink->needsTrailingPadding()) {
+                                postEOSDelayUs = timeToCompletionUs + mLatencyUs;
+                            } else {
+                                postEOSDelayUs = 0;
+                            }
+                        }
+
                         mReachedEOS = true;
                     }
                 }
@@ -586,6 +639,12 @@ size_t AudioPlayer::fillBuffer(void *data, size_t size) {
             // might not be able to get the exact seek time requested.
             if (refreshSeekTime) {
                 if (useOffload()) {
+                    if (postSeekComplete) {
+                        ALOGV("fillBuffer is going to post SEEK_COMPLETE");
+                        mObserver->postAudioSeekComplete();
+                        postSeekComplete = false;
+                    }
+
                     mStartPosUs = mPositionTimeMediaUs;
                     ALOGV("adjust seek time to: %.2f", mStartPosUs/ 1E6);
                 }
@@ -650,6 +709,14 @@ size_t AudioPlayer::fillBuffer(void *data, size_t size) {
         } else {
             mPinnedTimeUs = -1ll;
         }
+    }
+
+    if (postEOS) {
+        mObserver->postAudioEOS(postEOSDelayUs);
+    }
+
+    if (postSeekComplete) {
+        mObserver->postAudioSeekComplete();
     }
 
     return size_done;
