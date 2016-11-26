@@ -2377,11 +2377,12 @@ status_t ACodec::configureCodec(
         err = setMinBufferSize(kPortIndexInput, 8192);  // XXX
     }
 
+/*
     int32_t priority;
     if (msg->findInt32("priority", &priority)) {
         err = setPriority(priority);
     }
-
+*/
     int32_t rateInt = -1;
     float rateFloat = -1;
     if (!msg->findFloat("operating-rate", &rateFloat)) {
@@ -3547,9 +3548,9 @@ status_t ACodec::setColorAspectsForVideoDecoder(
         // format, in case component does not support this enumeration.
         setColorAspectsIntoFormat(params.sAspects, outputFormat);
     }
-
+/*
     (void)initDescribeColorAspectsIndex();
-
+*/
     // communicate color aspects to codec
     return setCodecColorAspects(params);
 }
@@ -4008,13 +4009,13 @@ status_t ACodec::setupVideoEncoder(
     if (err != OK) {
         return err;
     }
-
+/*
     err = setHDRStaticInfoForVideoCodec(kPortIndexInput, msg, outputFormat);
     if (err == ERROR_UNSUPPORTED) { // support is optional
         ALOGI("[%s] cannot encode HDR static metadata. Ignoring.", mComponentName.c_str());
         err = OK;
     }
-
+*/
     if (err != OK) {
         return err;
     }
@@ -7787,7 +7788,7 @@ status_t ACodec::setParameters(const sp<AMessage> &params) {
             return err;
         }
     }
-
+/*
     float rate;
     if (params->findFloat("operating-rate", &rate) && rate > 0) {
         status_t err = setOperatingRate(rate, mIsVideo);
@@ -7807,7 +7808,7 @@ status_t ACodec::setParameters(const sp<AMessage> &params) {
             err = OK;
         }
     }
-
+*/
     status_t err = configureTemporalLayers(params, false /* inConfigure */, mOutputFormat);
     if (err != OK) {
         err = OK; // ignore failure
