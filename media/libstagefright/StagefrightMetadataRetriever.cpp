@@ -146,7 +146,7 @@ status_t StagefrightMetadataRetriever::setDataSource(
 }
 
 static VideoFrame *extractVideoFrame(
-        const char *componentName,
+        const AString &componentName,
         const sp<MetaData> &trackMeta,
         const sp<IMediaSource> &source,
         int64_t frameTimeUs,
@@ -179,7 +179,7 @@ static VideoFrame *extractVideoFrame(
             looper, componentName, &err);
 
     if (decoder.get() == NULL || err != OK) {
-        ALOGW("Failed to instantiate decoder [%s]", componentName);
+        ALOGW("Failed to instantiate decoder [%s]", componentName.c_str());
         return NULL;
     }
 
@@ -524,10 +524,10 @@ VideoFrame *StagefrightMetadataRetriever::getFrameAtTime(
             FFMPEGSoftCodec::overrideComponentName(0, trackMeta, mime, false);
         if (ffmpegComponentName != NULL) {
             ALOGV("override compoent %s to %s for video frame extraction.",
-                    matchingCodecs[i].c_str(), ffmpegComponentName);
+                    matchingCodecs[i].mName.string(), ffmpegComponentName);
             componentName.setTo(ffmpegComponentName);
         } else {
-            componentName = matchingCodecs[i];
+            componentName = matchingCodecs[i].mName.string();
         }
 
         VideoFrame *frame =
@@ -536,7 +536,7 @@ VideoFrame *StagefrightMetadataRetriever::getFrameAtTime(
         if (frame != NULL) {
             return frame;
         }
-        ALOGV("%s failed to extract thumbnail, trying next decoder.", componentName);
+        ALOGV("%s failed to extract thumbnail, trying next decoder.", componentName.c_str());
     }
 
     return NULL;
