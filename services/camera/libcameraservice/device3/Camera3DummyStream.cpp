@@ -36,28 +36,28 @@ Camera3DummyStream::~Camera3DummyStream() {
 
 }
 
-status_t Camera3DummyStream::getBufferLocked(camera3_stream_buffer *) {
+status_t Camera3DummyStream::getBufferLocked(camera3_stream_buffer *buffer) {
     ATRACE_CALL();
-    ALOGE("%s: Stream %d: Dummy stream cannot produce buffers!", __FUNCTION__, mId);
+    ALOGE("%s: Stream %d: Dummy stream cannot produce buffers!", mId);
     return INVALID_OPERATION;
 }
 
 status_t Camera3DummyStream::returnBufferLocked(
-        const camera3_stream_buffer &,
-        nsecs_t) {
+        const camera3_stream_buffer &buffer,
+        nsecs_t timestamp) {
     ATRACE_CALL();
-    ALOGE("%s: Stream %d: Dummy stream cannot return buffers!", __FUNCTION__, mId);
+    ALOGE("%s: Stream %d: Dummy stream cannot return buffers!", mId);
     return INVALID_OPERATION;
 }
 
 status_t Camera3DummyStream::returnBufferCheckedLocked(
-            const camera3_stream_buffer &,
-            nsecs_t,
-            bool,
+            const camera3_stream_buffer &buffer,
+            nsecs_t timestamp,
+            bool output,
             /*out*/
-            sp<Fence>*) {
+            sp<Fence> *releaseFenceOut) {
     ATRACE_CALL();
-    ALOGE("%s: Stream %d: Dummy stream cannot return buffers!", __FUNCTION__, mId);
+    ALOGE("%s: Stream %d: Dummy stream cannot return buffers!", mId);
     return INVALID_OPERATION;
 }
 
@@ -70,15 +70,8 @@ void Camera3DummyStream::dump(int fd, const Vector<String16> &args) const {
     Camera3IOStreamBase::dump(fd, args);
 }
 
-status_t Camera3DummyStream::setTransform(int) {
+status_t Camera3DummyStream::setTransform(int transform) {
     ATRACE_CALL();
-    // Do nothing
-    return OK;
-}
-
-status_t Camera3DummyStream::detachBuffer(sp<GraphicBuffer>* buffer, int* fenceFd) {
-    (void) buffer;
-    (void) fenceFd;
     // Do nothing
     return OK;
 }
@@ -103,15 +96,6 @@ bool Camera3DummyStream::isVideoStream() const {
     return false;
 }
 
-bool Camera3DummyStream::isConsumerConfigurationDeferred() const {
-    return false;
-}
-
-status_t Camera3DummyStream::setConsumer(sp<Surface> consumer) {
-    ALOGE("%s: Stream %d: Dummy stream doesn't support set consumer surface %p!",
-            __FUNCTION__, mId, consumer.get());
-    return INVALID_OPERATION;
-}
 }; // namespace camera3
 
 }; // namespace android

@@ -38,8 +38,8 @@ public:
     /**
      * Base binder interface (see ICamera/ICameraDeviceUser for details)
      */
-    virtual status_t       connect(const sp<TCamCallbacks>& callbacks);
-    virtual binder::Status disconnect();
+    virtual status_t      connect(const sp<TCamCallbacks>& callbacks);
+    virtual void          disconnect();
 
     /**
      * Interface used by CameraService
@@ -63,7 +63,7 @@ public:
      * CameraDeviceBase::NotificationListener implementation
      */
 
-    virtual void          notifyError(int32_t errorCode,
+    virtual void          notifyError(ICameraDeviceCallbacks::CameraErrorCode errorCode,
                                       const CaptureResultExtras& resultExtras);
     virtual void          notifyIdle();
     virtual void          notifyShutter(const CaptureResultExtras& resultExtras,
@@ -73,7 +73,6 @@ public:
     virtual void          notifyAutoWhitebalance(uint8_t newState,
                                                  int triggerId);
     virtual void          notifyPrepared(int streamId);
-    virtual void          notifyRepeatingRequestError(long lastFrameNumber);
 
     int                   getCameraId() const;
     const sp<CameraDeviceBase>&
@@ -126,7 +125,7 @@ protected:
     // that mBinderSerializationLock is locked when they're called
     mutable Mutex         mBinderSerializationLock;
 
-    /** CameraDeviceBase instance wrapping HAL3+ entry */
+    /** CameraDeviceBase instance wrapping HAL2+ entry */
 
     const int mDeviceVersion;
     sp<CameraDeviceBase>  mDevice;

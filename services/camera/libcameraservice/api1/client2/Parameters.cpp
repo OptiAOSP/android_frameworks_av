@@ -30,7 +30,6 @@
 #include "Parameters.h"
 #include "system/camera.h"
 #include "hardware/camera_common.h"
-#include <android/hardware/ICamera.h>
 #include <media/MediaProfiles.h>
 #include <media/mediarecorder.h>
 
@@ -871,9 +870,8 @@ status_t Parameters::initialize(const CameraMetadata *info, int deviceVersion) {
     }
 
     // Set up initial state for non-Camera.Parameters state variables
-    videoFormat = HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED;
-    videoDataSpace = HAL_DATASPACE_V0_BT709;
-    videoBufferMode = hardware::ICamera::VIDEO_BUFFER_MODE_DATA_CALLBACK_YUV;
+
+    storeMetadataInBuffers = true;
     playShutterSound = true;
     enableFaceDetect = false;
 
@@ -908,12 +906,14 @@ status_t Parameters::initialize(const CameraMetadata *info, int deviceVersion) {
     property_get("camera.disable_zsl_mode", value, "0");
     if (!strcmp(value,"1") || slowJpegMode) {
         ALOGI("Camera %d: Disabling ZSL mode", cameraId);
-        allowZslMode = false;
+        zslMode = false;
     } else {
-        allowZslMode = true;
+        zslMode = true;
     }
 
-    ALOGI("%s: allowZslMode: %d slowJpegMode %d", __FUNCTION__, allowZslMode, slowJpegMode);
+    ALOGI("%s: zslMode: %d slowJpegMode %d", __FUNCTION__, zslMode, slowJpegMode);
+
+    lightFx = LIGHTFX_NONE;
 
     state = STOPPED;
 
@@ -1040,7 +1040,7 @@ status_t Parameters::buildFastInfo() {
             ALOGE("%s: Camera %d: Scene mode override list is an "
                     "unexpected size: %zu (expected %zu)", __FUNCTION__,
                     cameraId, sceneModeOverrides.count,
-                    availableSceneModes.count * kModesPerSceneMode);
+                    availableSceneModes.count);
             return NO_INIT;
         }
         for (size_t i = 0; i < availableSceneModes.count; i++) {
@@ -1126,8 +1126,6 @@ status_t Parameters::buildFastInfo() {
     }
     ALOGV("Camera %d: Flexible YUV %s supported",
             cameraId, fastInfo.useFlexibleYuv ? "is" : "is not");
-
-    fastInfo.maxJpegSize = getMaxSize(getAvailableJpegSizes());
 
     return OK;
 }
@@ -1866,6 +1864,10 @@ status_t Parameters::set(const String8& paramString) {
         ALOGE("%s: Video stabilization not supported", __FUNCTION__);
     }
 
+    // LIGHTFX
+    validatedParams.lightFx = lightFxStringToEnum(
+        newParams.get(CameraParameters::KEY_LIGHTFX));
+
     /** Update internal parameters */
 
     *this = validatedParams;
@@ -1957,7 +1959,7 @@ status_t Parameters::updateRequest(CameraMetadata *request) const {
     if (res != OK) return res;
 
     // android.hardware.Camera requires that when face detect is enabled, the
-    // camera is in a face-priority mode. HAL3.x splits this into separate parts
+    // camera is in a face-priority mode. HAL2 splits this into separate parts
     // (face detection statistics and face priority scene mode). Map from other
     // to the other.
     bool sceneModeActive =
@@ -2233,25 +2235,6 @@ bool Parameters::isJpegSizeOverridden() {
     return pictureSizeOverriden;
 }
 
-bool Parameters::useZeroShutterLag() const {
-    // If ZSL mode is disabled, don't use it
-    if (!allowZslMode) return false;
-    // If recording hint is enabled, don't do ZSL
-    if (recordingHint) return false;
-    // If still capture size is no bigger than preview or video size,
-    // don't do ZSL
-    if (pictureWidth <= previewWidth || pictureHeight <= previewHeight ||
-            pictureWidth <= videoWidth || pictureHeight <= videoHeight) {
-        return false;
-    }
-    // If still capture size is less than quarter of max, don't do ZSL
-    if ((pictureWidth * pictureHeight) <
-            (fastInfo.maxJpegSize.width * fastInfo.maxJpegSize.height / 4) ) {
-        return false;
-    }
-    return true;
-}
-
 const char* Parameters::getStateName(State state) {
 #define CASE_ENUM_TO_CHAR(x) case x: return(#x); break;
     switch(state) {
@@ -2516,6 +2499,18 @@ const char *Parameters::focusModeEnumToString(focusMode_t focusMode) {
                     __FUNCTION__, focusMode);
             return "unknown";
     }
+}
+
+Parameters::Parameters::lightFxMode_t Parameters::lightFxStringToEnum(
+        const char *lightFxMode) {
+    return
+        !lightFxMode ?
+            Parameters::LIGHTFX_NONE :
+        !strcmp(lightFxMode, CameraParameters::LIGHTFX_LOWLIGHT) ?
+            Parameters::LIGHTFX_LOWLIGHT :
+        !strcmp(lightFxMode, CameraParameters::LIGHTFX_HDR) ?
+            Parameters::LIGHTFX_HDR :
+        Parameters::LIGHTFX_NONE;
 }
 
 status_t Parameters::parseAreas(const char *areasCStr,

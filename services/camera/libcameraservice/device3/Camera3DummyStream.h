@@ -54,22 +54,10 @@ class Camera3DummyStream :
 
     status_t         setTransform(int transform);
 
-    virtual status_t detachBuffer(sp<GraphicBuffer>* buffer, int* fenceFd);
-
     /**
      * Return if this output stream is for video encoding.
      */
     bool isVideoStream() const;
-
-    /**
-     * Return if the consumer configuration of this stream is deferred.
-     */
-    virtual bool isConsumerConfigurationDeferred() const;
-
-    /**
-     * Set the consumer surface to the output stream.
-     */
-    virtual status_t setConsumer(sp<Surface> consumer);
 
   protected:
 

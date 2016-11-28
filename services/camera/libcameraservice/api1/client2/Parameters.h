@@ -131,19 +131,23 @@ struct Parameters {
 
     int zoom;
 
-    int videoWidth, videoHeight, videoFormat;
-    android_dataspace videoDataSpace;
+    int videoWidth, videoHeight;
 
     bool recordingHint;
     bool videoStabilization;
+
+    enum lightFxMode_t {
+        LIGHTFX_NONE = 0,
+        LIGHTFX_LOWLIGHT,
+        LIGHTFX_HDR
+    } lightFx;
 
     CameraParameters2 params;
     String8 paramsFlattened;
 
     // These parameters are also part of the camera API-visible state, but not
     // directly listed in Camera.Parameters
-    // One of ICamera::VIDEO_BUFFER_MODE_*
-    int32_t videoBufferMode;
+    bool storeMetadataInBuffers;
     bool playShutterSound;
     bool enableFaceDetect;
 
@@ -161,9 +165,9 @@ struct Parameters {
     bool previewCallbackOneShot;
     bool previewCallbackSurface;
 
-    bool allowZslMode;
+    bool zslMode;
     // Whether the jpeg stream is slower than 30FPS and can slow down preview.
-    // When slowJpegMode is true, allowZslMode must be false to avoid slowing down preview.
+    // When slowJpegMode is true, zslMode must be false to avoid slowing down preview.
     bool slowJpegMode;
 
     // Overall camera state
@@ -219,7 +223,6 @@ struct Parameters {
         DefaultKeyedVector<uint8_t, OverrideModes> sceneModeOverrides;
         float minFocalLength;
         bool useFlexibleYuv;
-        Size maxJpegSize;
     } fastInfo;
 
     // Quirks information; these are short-lived flags to enable workarounds for
@@ -272,8 +275,6 @@ struct Parameters {
     status_t recoverOverriddenJpegSize();
     // if video snapshot size is currently overridden
     bool isJpegSizeOverridden();
-    // whether zero shutter lag should be used for non-recording operation
-    bool useZeroShutterLag() const;
 
     // Calculate the crop region rectangle, either tightly about the preview
     // resolution, or a region just based on the active array; both take
@@ -306,6 +307,7 @@ struct Parameters {
     static const char* flashModeEnumToString(flashMode_t flashMode);
     static focusMode_t focusModeStringToEnum(const char *focusMode);
     static const char* focusModeEnumToString(focusMode_t focusMode);
+    static lightFxMode_t lightFxStringToEnum(const char *lightFxMode);
 
     static status_t parseAreas(const char *areasCStr,
             Vector<Area> *areas);
@@ -328,7 +330,7 @@ struct Parameters {
     static const int kFpsToApiScale = 1000;
 
     // Transform from (-1000,-1000)-(1000,1000) normalized coords from camera
-    // API to HAL3 (0,0)-(activePixelArray.width/height) coordinates
+    // API to HAL2 (0,0)-(activePixelArray.width/height) coordinates
     int normalizedXToArray(int x) const;
     int normalizedYToArray(int y) const;
 
@@ -348,7 +350,7 @@ struct Parameters {
 private:
 
     // Convert from viewfinder crop-region relative array coordinates
-    // to HAL3 sensor array coordinates
+    // to HAL2 sensor array coordinates
     int cropXToArray(int x) const;
     int cropYToArray(int y) const;
 

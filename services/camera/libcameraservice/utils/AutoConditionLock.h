@@ -92,7 +92,6 @@ private:
 
     std::shared_ptr<WaitableMutexWrapper> mManager;
     Mutex::Autolock mAutoLock;
-    bool mAcquired;
 };
 
 }; // namespace android

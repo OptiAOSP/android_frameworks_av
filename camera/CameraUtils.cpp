@@ -18,7 +18,6 @@
 //#define LOG_NDEBUG 0
 
 #include <camera/CameraUtils.h>
-#include <media/hardware/HardwareAPI.h>
 
 #include <system/window.h>
 #include <system/graphics.h>
@@ -121,5 +120,6 @@ status_t CameraUtils::getRotationTransform(const CameraMetadata& staticInfo,
 
     return OK;
 }
+
 
 } /* namespace android */

@@ -47,19 +47,13 @@ const Camera3Stream* Camera3Stream::cast(const camera3_stream *stream) {
 Camera3Stream::Camera3Stream(int id,
         camera3_stream_type type,
         uint32_t width, uint32_t height, size_t maxSize, int format,
-        android_dataspace dataSpace, camera3_stream_rotation_t rotation, int setId) :
+        android_dataspace dataSpace, camera3_stream_rotation_t rotation) :
     camera3_stream(),
     mId(id),
-    mSetId(setId),
     mName(String8::format("Camera3Stream[%d]", id)),
     mMaxSize(maxSize),
     mState(STATE_CONSTRUCTED),
     mStatusId(StatusTracker::NO_STATUS_ID),
-    mStreamUnpreparable(true),
-    mOldUsage(0),
-    mOldMaxBuffers(0),
-    mPrepared(false),
-    mPreparedBufferIdx(0),
     mLastMaxCount(Camera3StreamInterface::ALLOCATE_PIPELINE_MAX) {
 
     camera3_stream::stream_type = type;
@@ -72,19 +66,14 @@ Camera3Stream::Camera3Stream(int id,
     camera3_stream::max_buffers = 0;
     camera3_stream::priv = NULL;
 
-    if ((format == HAL_PIXEL_FORMAT_BLOB || format == HAL_PIXEL_FORMAT_RAW_OPAQUE) &&
-            maxSize == 0) {
-        ALOGE("%s: BLOB or RAW_OPAQUE format with size == 0", __FUNCTION__);
+    if (format == HAL_PIXEL_FORMAT_BLOB && maxSize == 0) {
+        ALOGE("%s: BLOB format with size == 0", __FUNCTION__);
         mState = STATE_ERROR;
     }
 }
 
 int Camera3Stream::getId() const {
     return mId;
-}
-
-int Camera3Stream::getStreamSetId() const {
-    return mSetId;
 }
 
 uint32_t Camera3Stream::getWidth() const {
@@ -118,7 +107,7 @@ camera3_stream* Camera3Stream::startConfiguration() {
         case STATE_IN_CONFIG:
         case STATE_IN_RECONFIG:
             // Can start config again with no trouble; but don't redo
-            // mOldUsage/mOldMaxBuffers
+            // oldUsage/oldMaxBuffers
             return this;
         case STATE_CONFIGURED:
             if (hasOutstandingBuffersLocked()) {
@@ -132,8 +121,8 @@ camera3_stream* Camera3Stream::startConfiguration() {
             return NULL;
     }
 
-    mOldUsage = camera3_stream::usage;
-    mOldMaxBuffers = camera3_stream::max_buffers;
+    oldUsage = camera3_stream::usage;
+    oldMaxBuffers = camera3_stream::max_buffers;
 
     res = getEndpointUsage(&(camera3_stream::usage));
     if (res != OK) {
@@ -196,8 +185,8 @@ status_t Camera3Stream::finishConfiguration(camera3_device *hal3Device) {
     // Check if the stream configuration is unchanged, and skip reallocation if
     // so. As documented in hardware/camera3.h:configure_streams().
     if (mState == STATE_IN_RECONFIG &&
-            mOldUsage == camera3_stream::usage &&
-            mOldMaxBuffers == camera3_stream::max_buffers) {
+            oldUsage == camera3_stream::usage &&
+            oldMaxBuffers == camera3_stream::max_buffers) {
         mState = STATE_CONFIGURED;
         return OK;
     }
@@ -250,8 +239,8 @@ status_t Camera3Stream::cancelConfiguration() {
             return INVALID_OPERATION;
     }
 
-    camera3_stream::usage = mOldUsage;
-    camera3_stream::max_buffers = mOldMaxBuffers;
+    camera3_stream::usage = oldUsage;
+    camera3_stream::max_buffers = oldMaxBuffers;
 
     mState = (mState == STATE_IN_RECONFIG) ? STATE_CONFIGURED : STATE_CONSTRUCTED;
     return OK;
@@ -268,6 +257,7 @@ status_t Camera3Stream::startPrepare(int maxCount) {
     ATRACE_CALL();
 
     Mutex::Autolock l(mLock);
+    status_t res = OK;
 
     if (maxCount < 0) {
         ALOGE("%s: Stream %d: Can't prepare stream if max buffer count (%d) is < 0",
@@ -323,11 +313,6 @@ bool Camera3Stream::isPreparing() const {
     return mState == STATE_PREPARING;
 }
 
-bool Camera3Stream::isAbandoned() const {
-    Mutex::Autolock l(mLock);
-    return mState == STATE_ABANDONED;
-}
-
 status_t Camera3Stream::prepareNextBuffer() {
     ATRACE_CALL();
 
@@ -344,7 +329,7 @@ status_t Camera3Stream::prepareNextBuffer() {
     // Get next buffer - this may allocate, and take a while for large buffers
     res = getBufferLocked( &mPreparedBuffers.editItemAt(mPreparedBufferIdx) );
     if (res != OK) {
-        ALOGE("%s: Stream %d: Unable to allocate buffer %zu during preparation",
+        ALOGE("%s: Stream %d: Unable to allocate buffer %d during preparation",
                 __FUNCTION__, mId, mPreparedBufferIdx);
         return NO_INIT;
     }
@@ -481,50 +466,15 @@ status_t Camera3Stream::getBuffer(camera3_stream_buffer *buffer) {
     res = getBufferLocked(buffer);
     if (res == OK) {
         fireBufferListenersLocked(*buffer, /*acquired*/true, /*output*/true);
-        if (buffer->buffer) {
-            mOutstandingBuffers.push_back(*buffer->buffer);
-        }
     }
 
     return res;
-}
-
-bool Camera3Stream::isOutstandingBuffer(const camera3_stream_buffer &buffer) {
-    if (buffer.buffer == nullptr) {
-        return false;
-    }
-
-    for (auto b : mOutstandingBuffers) {
-        if (b == *buffer.buffer) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void Camera3Stream::removeOutstandingBuffer(const camera3_stream_buffer &buffer) {
-    if (buffer.buffer == nullptr) {
-        return;
-    }
-
-    for (auto b = mOutstandingBuffers.begin(); b != mOutstandingBuffers.end(); b++) {
-        if (*b == *buffer.buffer) {
-            mOutstandingBuffers.erase(b);
-            return;
-        }
-    }
 }
 
 status_t Camera3Stream::returnBuffer(const camera3_stream_buffer &buffer,
         nsecs_t timestamp) {
     ATRACE_CALL();
     Mutex::Autolock l(mLock);
-
-    // Check if this buffer is outstanding.
-    if (!isOutstandingBuffer(buffer)) {
-        ALOGE("%s: Stream %d: Returning an unknown buffer.", __FUNCTION__, mId);
-        return BAD_VALUE;
-    }
 
     /**
      * TODO: Check that the state is valid first.
@@ -543,7 +493,6 @@ status_t Camera3Stream::returnBuffer(const camera3_stream_buffer &buffer,
     // buffer to be returned.
     mOutputBufferReturnedSignal.signal();
 
-    removeOutstandingBuffer(buffer);
     return res;
 }
 
@@ -576,9 +525,6 @@ status_t Camera3Stream::getInputBuffer(camera3_stream_buffer *buffer) {
     res = getInputBufferLocked(buffer);
     if (res == OK) {
         fireBufferListenersLocked(*buffer, /*acquired*/true, /*output*/false);
-        if (buffer->buffer) {
-            mOutstandingBuffers.push_back(*buffer->buffer);
-        }
     }
 
     return res;
@@ -588,19 +534,11 @@ status_t Camera3Stream::returnInputBuffer(const camera3_stream_buffer &buffer) {
     ATRACE_CALL();
     Mutex::Autolock l(mLock);
 
-    // Check if this buffer is outstanding.
-    if (!isOutstandingBuffer(buffer)) {
-        ALOGE("%s: Stream %d: Returning an unknown buffer.", __FUNCTION__, mId);
-        return BAD_VALUE;
-    }
-
     status_t res = returnInputBufferLocked(buffer);
     if (res == OK) {
         fireBufferListenersLocked(buffer, /*acquired*/false, /*output*/false);
         mInputBufferReturnedSignal.signal();
     }
-
-    removeOutstandingBuffer(buffer);
     return res;
 }
 
@@ -612,7 +550,7 @@ status_t Camera3Stream::getInputBufferProducer(sp<IGraphicBufferProducer> *produ
 }
 
 void Camera3Stream::fireBufferListenersLocked(
-        const camera3_stream_buffer& buffer, bool acquired, bool output) {
+        const camera3_stream_buffer& /*buffer*/, bool acquired, bool output) {
     List<wp<Camera3StreamBufferListener> >::iterator it, end;
 
     // TODO: finish implementing
@@ -620,7 +558,6 @@ void Camera3Stream::fireBufferListenersLocked(
     Camera3StreamBufferListener::BufferInfo info =
         Camera3StreamBufferListener::BufferInfo();
     info.mOutput = output;
-    info.mError = (buffer.status == CAMERA3_BUFFER_STATUS_ERROR);
     // TODO: rest of fields
 
     for (it = mBufferListenerList.begin(), end = mBufferListenerList.end();
@@ -771,7 +708,7 @@ status_t Camera3Stream::returnInputBufferLocked(
     ALOGE("%s: This type of stream does not support input", __FUNCTION__);
     return INVALID_OPERATION;
 }
-status_t Camera3Stream::getInputBufferProducerLocked(sp<IGraphicBufferProducer>*) {
+status_t Camera3Stream::getInputBufferProducerLocked(sp<IGraphicBufferProducer> *producer) {
     ALOGE("%s: This type of stream does not support input", __FUNCTION__);
     return INVALID_OPERATION;
 }

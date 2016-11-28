@@ -53,27 +53,27 @@ static bool ContainsTag(uint32_t* tagArray, size_t size, uint32_t tag) {
 
 extern "C" {
 
-static int zero_get_tag_count(const vendor_tag_ops_t*) {
+static int zero_get_tag_count(const vendor_tag_ops_t* vOps) {
     return 0;
 }
 
-static int default_get_tag_count(const vendor_tag_ops_t*) {
+static int default_get_tag_count(const vendor_tag_ops_t* vOps) {
     return VENDOR_TAG_COUNT_ERR;
 }
 
-static void default_get_all_tags(const vendor_tag_ops_t*, uint32_t*) {
+static void default_get_all_tags(const vendor_tag_ops_t* vOps, uint32_t* tagArray) {
     //Noop
 }
 
-static const char* default_get_section_name(const vendor_tag_ops_t*, uint32_t) {
+static const char* default_get_section_name(const vendor_tag_ops_t* vOps, uint32_t tag) {
     return VENDOR_SECTION_NAME_ERR;
 }
 
-static const char* default_get_tag_name(const vendor_tag_ops_t*, uint32_t) {
+static const char* default_get_tag_name(const vendor_tag_ops_t* vOps, uint32_t tag) {
     return VENDOR_TAG_NAME_ERR;
 }
 
-static int default_get_tag_type(const vendor_tag_ops_t*, uint32_t) {
+static int default_get_tag_type(const vendor_tag_ops_t* vOps, uint32_t tag) {
     return VENDOR_TAG_TYPE_ERR;
 }
 
@@ -141,8 +141,7 @@ TEST(VendorTagDescriptorTest, ConsistentAcrossParcel) {
     // Check whether parcel read/write succeed
     EXPECT_EQ(OK, vDescOriginal->writeToParcel(&p));
     p.setDataPosition(0);
-
-    ASSERT_EQ(OK, vDescParceled->readFromParcel(&p));
+    ASSERT_EQ(OK, VendorTagDescriptor::createFromParcel(&p, vDescParceled));
 
     // Ensure consistent tag count
     int tagCount = vDescOriginal->getTagCount();
@@ -198,6 +197,7 @@ TEST(VendorTagDescriptorTest, ErrorConditions) {
     EXPECT_EQ(VENDOR_TAG_TYPE_ERR, vDesc->getTagType(BAD_TAG));
 
     // Make sure global can be set/cleared
+    const vendor_tag_ops_t *fakeOps = &fakevendor_ops;
     sp<VendorTagDescriptor> prevGlobal = VendorTagDescriptor::getGlobalVendorTagDescriptor();
     VendorTagDescriptor::clearGlobalVendorTagDescriptor();
 
@@ -208,3 +208,4 @@ TEST(VendorTagDescriptorTest, ErrorConditions) {
     EXPECT_EQ(OK, VendorTagDescriptor::setAsGlobalVendorTagDescriptor(prevGlobal));
     EXPECT_EQ(prevGlobal, VendorTagDescriptor::getGlobalVendorTagDescriptor());
 }
+

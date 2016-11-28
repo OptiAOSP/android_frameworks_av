@@ -16,12 +16,10 @@
 
 //#define LOG_NDEBUG 0
 #define LOG_TAG "ICameraRecordingProxy"
-#include <camera/CameraUtils.h>
 #include <camera/ICameraRecordingProxy.h>
 #include <camera/ICameraRecordingProxyListener.h>
 #include <binder/IMemory.h>
 #include <binder/Parcel.h>
-#include <media/hardware/HardwareAPI.h>
 #include <stdint.h>
 #include <utils/Log.h>
 
@@ -31,9 +29,13 @@ enum {
     START_RECORDING = IBinder::FIRST_CALL_TRANSACTION,
     STOP_RECORDING,
     RELEASE_RECORDING_FRAME,
-    RELEASE_RECORDING_FRAME_HANDLE,
 };
 
+uint8_t ICameraRecordingProxy::baseObject = 0;
+
+size_t ICameraRecordingProxy::getCommonBaseAddress() {
+    return (size_t)&baseObject;
+}
 
 class BpCameraRecordingProxy: public BpInterface<ICameraRecordingProxy>
 {
@@ -69,19 +71,6 @@ public:
         data.writeStrongBinder(IInterface::asBinder(mem));
         remote()->transact(RELEASE_RECORDING_FRAME, data, &reply);
     }
-
-    void releaseRecordingFrameHandle(native_handle_t *handle) {
-        ALOGV("releaseRecordingFrameHandle");
-        Parcel data, reply;
-        data.writeInterfaceToken(ICameraRecordingProxy::getInterfaceDescriptor());
-        data.writeNativeHandle(handle);
-
-        remote()->transact(RELEASE_RECORDING_FRAME_HANDLE, data, &reply);
-
-        // Close the native handle because camera received a dup copy.
-        native_handle_close(handle);
-        native_handle_delete(handle);
-    }
 };
 
 IMPLEMENT_META_INTERFACE(CameraRecordingProxy, "android.hardware.ICameraRecordingProxy");
@@ -113,14 +102,7 @@ status_t BnCameraRecordingProxy::onTransact(
             releaseRecordingFrame(mem);
             return NO_ERROR;
         } break;
-        case RELEASE_RECORDING_FRAME_HANDLE: {
-            ALOGV("RELEASE_RECORDING_FRAME_HANDLE");
-            CHECK_INTERFACE(ICameraRecordingProxy, data, reply);
 
-            // releaseRecordingFrameHandle will be responsble to close the native handle.
-            releaseRecordingFrameHandle(data.readNativeHandle());
-            return NO_ERROR;
-        } break;
         default:
             return BBinder::onTransact(code, data, reply, flags);
     }
@@ -129,4 +111,3 @@ status_t BnCameraRecordingProxy::onTransact(
 // ----------------------------------------------------------------------------
 
 }; // namespace android
-

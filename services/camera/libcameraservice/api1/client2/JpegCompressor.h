@@ -71,6 +71,7 @@ class JpegCompressor: private Thread, public virtual RefBase {
     Vector<CpuConsumer::LockedBuffer*> mBuffers;
     CpuConsumer::LockedBuffer *mJpegBuffer;
     CpuConsumer::LockedBuffer *mAuxBuffer;
+    bool mFoundJpeg, mFoundAux;
 
     jpeg_compress_struct mCInfo;
 

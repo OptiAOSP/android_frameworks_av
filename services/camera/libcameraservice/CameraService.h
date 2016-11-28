@@ -17,22 +17,25 @@
 #ifndef ANDROID_SERVERS_CAMERA_CAMERASERVICE_H
 #define ANDROID_SERVERS_CAMERA_CAMERASERVICE_H
 
-#include <android/hardware/BnCameraService.h>
-#include <android/hardware/ICameraServiceListener.h>
-
 #include <cutils/multiuser.h>
 #include <utils/Vector.h>
 #include <utils/KeyedVector.h>
 #include <binder/AppOpsManager.h>
 #include <binder/BinderService.h>
 #include <binder/IAppOpsCallback.h>
+#include <camera/ICameraService.h>
 #include <camera/ICameraServiceProxy.h>
 #include <hardware/camera.h>
 
+#include <camera/ICamera.h>
+#include <camera/ICameraClient.h>
+#include <camera/camera2/ICameraDeviceUser.h>
+#include <camera/camera2/ICameraDeviceCallbacks.h>
 #include <camera/VendorTagDescriptor.h>
 #include <camera/CaptureResult.h>
 #include <camera/CameraParameters.h>
 
+#include <camera/ICameraServiceListener.h>
 #include "CameraFlashlight.h"
 
 #include "common/CameraModule.h"
@@ -59,7 +62,7 @@ class MediaPlayer;
 
 class CameraService :
     public BinderService<CameraService>,
-    public ::android::hardware::BnCameraService,
+    public BnCameraService,
     public IBinder::DeathRecipient,
     public camera_module_callbacks_t
 {
@@ -99,61 +102,58 @@ public:
 
     /////////////////////////////////////////////////////////////////////
     // HAL Callbacks
-    virtual void        onDeviceStatusChanged(camera_device_status_t cameraId,
+    virtual void        onDeviceStatusChanged(int cameraId,
                                               camera_device_status_t newStatus);
     virtual void        onTorchStatusChanged(const String8& cameraId,
-                                             int32_t newStatus);
+                                             ICameraServiceListener::TorchStatus
+                                                   newStatus);
 
     /////////////////////////////////////////////////////////////////////
     // ICameraService
-    virtual binder::Status     getNumberOfCameras(int32_t type, int32_t* numCameras);
+    virtual int32_t     getNumberOfCameras(int type);
+    virtual int32_t     getNumberOfCameras();
 
-    virtual binder::Status     getCameraInfo(int cameraId,
-            hardware::CameraInfo* cameraInfo);
-    virtual binder::Status     getCameraCharacteristics(int cameraId,
-            CameraMetadata* cameraInfo);
-    virtual binder::Status     getCameraVendorTagDescriptor(
+    virtual status_t    getCameraInfo(int cameraId,
+                                      struct CameraInfo* cameraInfo);
+    virtual status_t    getCameraCharacteristics(int cameraId,
+                                                 CameraMetadata* cameraInfo);
+    virtual status_t    getCameraVendorTagDescriptor(/*out*/ sp<VendorTagDescriptor>& desc);
+
+    virtual status_t connect(const sp<ICameraClient>& cameraClient, int cameraId,
+            const String16& clientPackageName, int clientUid,
             /*out*/
-            hardware::camera2::params::VendorTagDescriptor* desc);
+            sp<ICamera>& device);
 
-    virtual binder::Status     connect(const sp<hardware::ICameraClient>& cameraClient,
-            int32_t cameraId, const String16& clientPackageName,
-            int32_t clientUid, int clientPid,
+    virtual status_t connectLegacy(const sp<ICameraClient>& cameraClient, int cameraId,
+            int halVersion, const String16& clientPackageName, int clientUid,
             /*out*/
-            sp<hardware::ICamera>* device);
+            sp<ICamera>& device);
 
-    virtual binder::Status     connectLegacy(const sp<hardware::ICameraClient>& cameraClient,
-            int32_t cameraId, int32_t halVersion,
-            const String16& clientPackageName, int32_t clientUid,
+    virtual status_t connectDevice(
+            const sp<ICameraDeviceCallbacks>& cameraCb,
+            int cameraId,
+            const String16& clientPackageName,
+            int clientUid,
             /*out*/
-            sp<hardware::ICamera>* device);
+            sp<ICameraDeviceUser>& device);
 
-    virtual binder::Status     connectDevice(
-            const sp<hardware::camera2::ICameraDeviceCallbacks>& cameraCb, int32_t cameraId,
-            const String16& clientPackageName, int32_t clientUid,
-            /*out*/
-            sp<hardware::camera2::ICameraDeviceUser>* device);
+    virtual status_t    addListener(const sp<ICameraServiceListener>& listener);
+    virtual status_t    removeListener(
+                                    const sp<ICameraServiceListener>& listener);
 
-    virtual binder::Status    addListener(const sp<hardware::ICameraServiceListener>& listener);
-    virtual binder::Status    removeListener(
-            const sp<hardware::ICameraServiceListener>& listener);
-
-    virtual binder::Status    getLegacyParameters(
-            int32_t cameraId,
+    virtual status_t    getLegacyParameters(
+            int cameraId,
             /*out*/
             String16* parameters);
 
-    virtual binder::Status    setTorchMode(const String16& cameraId, bool enabled,
+    virtual status_t    setTorchMode(const String16& cameraId, bool enabled,
             const sp<IBinder>& clientBinder);
 
-    virtual binder::Status    notifySystemEvent(int32_t eventId,
-            const std::vector<int32_t>& args);
+    virtual void notifySystemEvent(int32_t eventId, const int32_t* args, size_t length);
 
     // OK = supports api of that version, -EOPNOTSUPP = does not support
-    virtual binder::Status    supportsCameraApi(
-            int32_t cameraId, int32_t apiVersion,
-            /*out*/
-            bool *isSupported);
+    virtual status_t    supportsCameraApi(
+            int cameraId, int apiVersion);
 
     // Extra permissions checks
     virtual status_t    onTransact(uint32_t code, const Parcel& data,
@@ -189,35 +189,35 @@ public:
 
     /////////////////////////////////////////////////////////////////////
     // Shared utilities
-    static binder::Status filterGetInfoErrorCode(status_t err);
+    static status_t     filterGetInfoErrorCode(status_t err);
 
     /////////////////////////////////////////////////////////////////////
     // CameraClient functionality
 
     class BasicClient : public virtual RefBase {
     public:
-        virtual status_t       initialize(CameraModule *module) = 0;
-        virtual binder::Status disconnect();
+        virtual status_t    initialize(CameraModule *module) = 0;
+        virtual void        disconnect();
 
         // because we can't virtually inherit IInterface, which breaks
         // virtual inheritance
-        virtual sp<IBinder>    asBinderWrapper() = 0;
+        virtual sp<IBinder> asBinderWrapper() = 0;
 
         // Return the remote callback binder object (e.g. ICameraDeviceCallbacks)
-        sp<IBinder>            getRemote() {
+        sp<IBinder>         getRemote() {
             return mRemoteBinder;
         }
 
         // Disallows dumping over binder interface
-        virtual status_t dump(int fd, const Vector<String16>& args);
+        virtual status_t      dump(int fd, const Vector<String16>& args);
         // Internal dump method to be called by CameraService
-        virtual status_t dumpClient(int fd, const Vector<String16>& args) = 0;
+        virtual status_t      dumpClient(int fd, const Vector<String16>& args) = 0;
 
         // Return the package name for this client
         virtual String16 getPackageName() const;
 
         // Notify client about a fatal error
-        virtual void notifyError(int32_t errorCode,
+        virtual void notifyError(ICameraDeviceCallbacks::CameraErrorCode errorCode,
                 const CaptureResultExtras& resultExtras) = 0;
 
         // Get the UID of the application client using this
@@ -248,13 +248,13 @@ public:
         bool                            mDestructionStarted;
 
         // these are initialized in the constructor.
-        sp<CameraService>               mCameraService;     // immutable after constructor
-        int                             mCameraId;          // immutable after constructor
-        int                             mCameraFacing;      // immutable after constructor
-        String16                        mClientPackageName; // immutable after constructor
+        sp<CameraService>               mCameraService;  // immutable after constructor
+        int                             mCameraId;       // immutable after constructor
+        int                             mCameraFacing;   // immutable after constructor
+        const String16                  mClientPackageName;
         pid_t                           mClientPid;
-        uid_t                           mClientUid;         // immutable after constructor
-        pid_t                           mServicePid;        // immutable after constructor
+        uid_t                           mClientUid;      // immutable after constructor
+        pid_t                           mServicePid;     // immutable after constructor
         bool                            mDisconnected;
 
         // - The app-side Binder interface to receive callbacks from us
@@ -286,14 +286,14 @@ public:
         virtual void opChanged(int32_t op, const String16& packageName);
     }; // class BasicClient
 
-    class Client : public hardware::BnCamera, public BasicClient
+    class Client : public BnCamera, public BasicClient
     {
     public:
-        typedef hardware::ICameraClient TCamCallbacks;
+        typedef ICameraClient TCamCallbacks;
 
         // ICamera interface (see ICamera for details)
-        virtual binder::Status disconnect();
-        virtual status_t      connect(const sp<hardware::ICameraClient>& client) = 0;
+        virtual void          disconnect();
+        virtual status_t      connect(const sp<ICameraClient>& client) = 0;
         virtual status_t      lock() = 0;
         virtual status_t      unlock() = 0;
         virtual status_t      setPreviewTarget(const sp<IGraphicBufferProducer>& bufferProducer)=0;
@@ -303,7 +303,7 @@ public:
         virtual status_t      startPreview() = 0;
         virtual void          stopPreview() = 0;
         virtual bool          previewEnabled() = 0;
-        virtual status_t      setVideoBufferMode(int32_t videoBufferMode) = 0;
+        virtual status_t      storeMetaDataInBuffers(bool enabled) = 0;
         virtual status_t      startRecording() = 0;
         virtual void          stopRecording() = 0;
         virtual bool          recordingEnabled() = 0;
@@ -314,11 +314,10 @@ public:
         virtual status_t      setParameters(const String8& params) = 0;
         virtual String8       getParameters() const = 0;
         virtual status_t      sendCommand(int32_t cmd, int32_t arg1, int32_t arg2) = 0;
-        virtual status_t      setVideoTarget(const sp<IGraphicBufferProducer>& bufferProducer) = 0;
 
         // Interface used by CameraService
         Client(const sp<CameraService>& cameraService,
-                const sp<hardware::ICameraClient>& cameraClient,
+                const sp<ICameraClient>& cameraClient,
                 const String16& clientPackageName,
                 int cameraId,
                 int cameraFacing,
@@ -328,7 +327,7 @@ public:
         ~Client();
 
         // return our camera client
-        const sp<hardware::ICameraClient>&    getRemoteCallback() {
+        const sp<ICameraClient>&    getRemoteCallback() {
             return mRemoteCallback;
         }
 
@@ -336,7 +335,7 @@ public:
             return asBinder(this);
         }
 
-        virtual void         notifyError(int32_t errorCode,
+        virtual void         notifyError(ICameraDeviceCallbacks::CameraErrorCode errorCode,
                                          const CaptureResultExtras& resultExtras);
 
         // Check what API level is used for this client. This is used to determine which
@@ -349,7 +348,7 @@ public:
         // Initialized in constructor
 
         // - The app-side Binder interface to receive callbacks from us
-        sp<hardware::ICameraClient>               mRemoteCallback;
+        sp<ICameraClient>               mRemoteCallback;
 
     }; // class Client
 
@@ -436,12 +435,12 @@ private:
          *
          * This method acquires mStatusLock.
          */
-        int32_t getStatus() const;
+        ICameraServiceListener::Status getStatus() const;
 
         /**
          * This function updates the status for this camera device, unless the given status
          * is in the given list of rejected status states, and execute the function passed in
-         * with a signature onStatusUpdateLocked(const String8&, int32_t)
+         * with a signature onStatusUpdateLocked(const String8&, ICameraServiceListener::Status)
          * if the status has changed.
          *
          * This method is idempotent, and will not result in the function passed to
@@ -449,8 +448,8 @@ private:
          * This method aquires mStatusLock.
          */
         template<class Func>
-        void updateStatus(int32_t status, const String8& cameraId,
-                std::initializer_list<int32_t> rejectSourceStates,
+        void updateStatus(ICameraServiceListener::Status status, const String8& cameraId,
+                std::initializer_list<ICameraServiceListener::Status> rejectSourceStates,
                 Func onStatusUpdatedLocked);
 
         /**
@@ -481,7 +480,7 @@ private:
 
     private:
         const String8 mId;
-        int32_t mStatus; // protected by mStatusLock
+        ICameraServiceListener::Status mStatus; // protected by mStatusLock
         const int mCost;
         std::set<String8> mConflicting;
         mutable Mutex mStatusLock;
@@ -492,14 +491,7 @@ private:
     virtual void onFirstRef();
 
     // Check if we can connect, before we acquire the service lock.
-    // The returned originalClientPid is the PID of the original process that wants to connect to
-    // camera.
-    // The returned clientPid is the PID of the client that directly connects to camera.
-    // originalClientPid and clientPid are usually the same except when the application uses
-    // mediaserver to connect to camera (using MediaRecorder to connect to camera). In that case,
-    // clientPid is the PID of mediaserver and originalClientPid is the PID of the application.
-    binder::Status validateConnectLocked(const String8& cameraId, const String8& clientName8,
-          /*inout*/int& clientUid, /*inout*/int& clientPid, /*out*/int& originalClientPid) const;
+    status_t validateConnectLocked(const String8& cameraId, /*inout*/int& clientUid) const;
 
     // Handle active client evictions, and update service state.
     // Only call with with mServiceLock held.
@@ -511,11 +503,9 @@ private:
 
     // Single implementation shared between the various connect calls
     template<class CALLBACK, class CLIENT>
-    binder::Status connectHelper(const sp<CALLBACK>& cameraCb, const String8& cameraId,
-            int halVersion, const String16& clientPackageName,
-            int clientUid, int clientPid,
-            apiLevel effectiveApiLevel, bool legacyMode, bool shimUpdateOnly,
-            /*out*/sp<CLIENT>& device);
+    status_t connectHelper(const sp<CALLBACK>& cameraCb, const String8& cameraId, int halVersion,
+            const String16& clientPackageName, int clientUid, apiLevel effectiveApiLevel,
+            bool legacyMode, bool shimUpdateOnly, /*out*/sp<CLIENT>& device);
 
     // Lock guarding camera service state
     Mutex               mServiceLock;
@@ -594,7 +584,7 @@ private:
     /**
      * Handle a notification that the current device user has changed.
      */
-    void doUserSwitch(const std::vector<int32_t>& newUserIds);
+    void doUserSwitch(const int32_t* newUserId, size_t length);
 
     /**
      * Add an event log message.
@@ -640,7 +630,6 @@ private:
 
     /**
      * Add a event log message that a serious service-level error has occured
-     * The errorCode should be one of the Android Errors
      */
     void logServiceError(const char* msg, int errorCode);
 
@@ -662,7 +651,7 @@ private:
     CameraModule*     mModule;
 
     // Guarded by mStatusListenerMutex
-    std::vector<sp<hardware::ICameraServiceListener>> mListenerList;
+    std::vector<sp<ICameraServiceListener>> mListenerList;
     Mutex       mStatusListenerLock;
 
     /**
@@ -673,9 +662,9 @@ private:
      * This method must be idempotent.
      * This method acquires mStatusLock and mStatusListenerLock.
      */
-    void updateStatus(int32_t status, const String8& cameraId,
-            std::initializer_list<int32_t> rejectedSourceStates);
-    void updateStatus(int32_t status, const String8& cameraId);
+    void updateStatus(ICameraServiceListener::Status status, const String8& cameraId,
+            std::initializer_list<ICameraServiceListener::Status> rejectedSourceStates);
+    void updateStatus(ICameraServiceListener::Status status, const String8& cameraId);
 
     // flashlight control
     sp<CameraFlashlight> mFlashlight;
@@ -686,7 +675,7 @@ private:
     // guard mTorchUidMap
     Mutex                mTorchUidMapMutex;
     // camera id -> torch status
-    KeyedVector<String8, int32_t> mTorchStatusMap;
+    KeyedVector<String8, ICameraServiceListener::TorchStatus> mTorchStatusMap;
     // camera id -> torch client binder
     // only store the last client that turns on each camera's torch mode
     KeyedVector<String8, sp<IBinder>> mTorchClientMap;
@@ -699,15 +688,15 @@ private:
     // handle torch mode status change and invoke callbacks. mTorchStatusMutex
     // should be locked.
     void onTorchStatusChangedLocked(const String8& cameraId,
-            int32_t newStatus);
+            ICameraServiceListener::TorchStatus newStatus);
 
     // get a camera's torch status. mTorchStatusMutex should be locked.
     status_t getTorchStatusLocked(const String8 &cameraId,
-            int32_t *status) const;
+            ICameraServiceListener::TorchStatus *status) const;
 
     // set a camera's torch status. mTorchStatusMutex should be locked.
     status_t setTorchStatusLocked(const String8 &cameraId,
-            int32_t status);
+            ICameraServiceListener::TorchStatus status);
 
     // IBinder::DeathRecipient implementation
     virtual void        binderDied(const wp<IBinder> &who);
@@ -719,25 +708,25 @@ private:
     /**
      * Initialize and cache the metadata used by the HAL1 shim for a given cameraId.
      *
-     * Sets Status to a service-specific error on failure
+     * Returns OK on success, or a negative error code.
      */
-    binder::Status      initializeShimMetadata(int cameraId);
+    status_t            initializeShimMetadata(int cameraId);
 
     /**
      * Get the cached CameraParameters for the camera. If they haven't been
      * cached yet, then initialize them for the first time.
      *
-     * Sets Status to a service-specific error on failure
+     * Returns OK on success, or a negative error code.
      */
-    binder::Status      getLegacyParametersLazy(int cameraId, /*out*/CameraParameters* parameters);
+    status_t            getLegacyParametersLazy(int cameraId, /*out*/CameraParameters* parameters);
 
     /**
      * Generate the CameraCharacteristics metadata required by the Camera2 API
      * from the available HAL1 CameraParameters and CameraInfo.
      *
-     * Sets Status to a service-specific error on failure
+     * Returns OK on success, or a negative error code.
      */
-    binder::Status      generateShimMetadata(int cameraId, /*out*/CameraMetadata* cameraInfo);
+    status_t            generateShimMetadata(int cameraId, /*out*/CameraMetadata* cameraInfo);
 
     static int getCallingPid();
 
@@ -753,8 +742,8 @@ private:
      */
     static int getCameraPriorityFromProcState(int procState);
 
-    static binder::Status makeClient(const sp<CameraService>& cameraService,
-            const sp<IInterface>& cameraCb, const String16& packageName, int cameraId,
+    static status_t makeClient(const sp<CameraService>& cameraService,
+            const sp<IInterface>& cameraCb, const String16& packageName, const String8& cameraId,
             int facing, int clientPid, uid_t clientUid, int servicePid, bool legacyMode,
             int halVersion, int deviceVersion, apiLevel effectiveApiLevel,
             /*out*/sp<BasicClient>* client);
@@ -769,12 +758,12 @@ private:
 };
 
 template<class Func>
-void CameraService::CameraState::updateStatus(int32_t status,
+void CameraService::CameraState::updateStatus(ICameraServiceListener::Status status,
         const String8& cameraId,
-        std::initializer_list<int32_t> rejectSourceStates,
+        std::initializer_list<ICameraServiceListener::Status> rejectSourceStates,
         Func onStatusUpdatedLocked) {
     Mutex::Autolock lock(mStatusLock);
-    int32_t oldStatus = mStatus;
+    ICameraServiceListener::Status oldStatus = mStatus;
     mStatus = status;
 
     if (oldStatus == status) {
@@ -784,9 +773,9 @@ void CameraService::CameraState::updateStatus(int32_t status,
     ALOGV("%s: Status has changed for camera ID %s from %#x to %#x", __FUNCTION__,
             cameraId.string(), oldStatus, status);
 
-    if (oldStatus == hardware::ICameraServiceListener::STATUS_NOT_PRESENT &&
-            (status != hardware::ICameraServiceListener::STATUS_PRESENT &&
-             status != hardware::ICameraServiceListener::STATUS_ENUMERATING)) {
+    if (oldStatus == ICameraServiceListener::STATUS_NOT_PRESENT &&
+        (status != ICameraServiceListener::STATUS_PRESENT &&
+         status != ICameraServiceListener::STATUS_ENUMERATING)) {
 
         ALOGW("%s: From NOT_PRESENT can only transition into PRESENT or ENUMERATING",
                 __FUNCTION__);
@@ -811,25 +800,15 @@ void CameraService::CameraState::updateStatus(int32_t status,
     onStatusUpdatedLocked(cameraId, status);
 }
 
-#define STATUS_ERROR(errorCode, errorString) \
-    binder::Status::fromServiceSpecificError(errorCode, \
-            String8::format("%s:%d: %s", __FUNCTION__, __LINE__, errorString))
-
-#define STATUS_ERROR_FMT(errorCode, errorString, ...) \
-    binder::Status::fromServiceSpecificError(errorCode, \
-            String8::format("%s:%d: " errorString, __FUNCTION__, __LINE__, __VA_ARGS__))
-
 
 template<class CALLBACK, class CLIENT>
-binder::Status CameraService::connectHelper(const sp<CALLBACK>& cameraCb, const String8& cameraId,
-        int halVersion, const String16& clientPackageName, int clientUid, int clientPid,
+status_t CameraService::connectHelper(const sp<CALLBACK>& cameraCb, const String8& cameraId,
+        int halVersion, const String16& clientPackageName, int clientUid,
         apiLevel effectiveApiLevel, bool legacyMode, bool shimUpdateOnly,
         /*out*/sp<CLIENT>& device) {
-    binder::Status ret = binder::Status::ok();
-
+    status_t ret = NO_ERROR;
     String8 clientName8(clientPackageName);
-
-    int originalClientPid = 0;
+    int clientPid = getCallingPid();
 
     ALOGI("CameraService::connect call (PID %d \"%s\", camera ID %s) for HAL version %s and "
             "Camera API version %d", clientPid, clientName8.string(), cameraId.string(),
@@ -843,16 +822,13 @@ binder::Status CameraService::connectHelper(const sp<CALLBACK>& cameraCb, const 
                 AutoConditionLock::waitAndAcquire(mServiceLockWrapper, DEFAULT_CONNECT_TIMEOUT_NS);
 
         if (lock == nullptr) {
-            ALOGE("CameraService::connect (PID %d) rejected (too many other clients connecting)."
+            ALOGE("CameraService::connect X (PID %d) rejected (too many other clients connecting)."
                     , clientPid);
-            return STATUS_ERROR_FMT(ERROR_MAX_CAMERAS_IN_USE,
-                    "Cannot open camera %s for \"%s\" (PID %d): Too many other clients connecting",
-                    cameraId.string(), clientName8.string(), clientPid);
+            return -EBUSY;
         }
 
         // Enforce client permissions and do basic sanity checks
-        if(!(ret = validateConnectLocked(cameraId, clientName8,
-                /*inout*/clientUid, /*inout*/clientPid, /*out*/originalClientPid)).isOk()) {
+        if((ret = validateConnectLocked(cameraId, /*inout*/clientUid)) != NO_ERROR) {
             return ret;
         }
 
@@ -861,37 +837,22 @@ binder::Status CameraService::connectHelper(const sp<CALLBACK>& cameraCb, const 
         if (shimUpdateOnly) {
             auto cameraState = getCameraState(cameraId);
             if (cameraState != nullptr) {
-                if (!cameraState->getShimParams().isEmpty()) return ret;
+                if (!cameraState->getShimParams().isEmpty()) return NO_ERROR;
             }
         }
 
-        status_t err;
-
         sp<BasicClient> clientTmp = nullptr;
         std::shared_ptr<resource_policy::ClientDescriptor<String8, sp<BasicClient>>> partial;
-        if ((err = handleEvictionsLocked(cameraId, originalClientPid, effectiveApiLevel,
+        if ((ret = handleEvictionsLocked(cameraId, clientPid, effectiveApiLevel,
                 IInterface::asBinder(cameraCb), clientName8, /*out*/&clientTmp,
                 /*out*/&partial)) != NO_ERROR) {
-            switch (err) {
-                case -ENODEV:
-                    return STATUS_ERROR_FMT(ERROR_DISCONNECTED,
-                            "No camera device with ID \"%s\" currently available",
-                            cameraId.string());
-                case -EBUSY:
-                    return STATUS_ERROR_FMT(ERROR_CAMERA_IN_USE,
-                            "Higher-priority client using camera, ID \"%s\" currently unavailable",
-                            cameraId.string());
-                default:
-                    return STATUS_ERROR_FMT(ERROR_INVALID_OPERATION,
-                            "Unexpected error %s (%d) opening camera \"%s\"",
-                            strerror(-err), err, cameraId.string());
-            }
+            return ret;
         }
 
         if (clientTmp.get() != nullptr) {
             // Handle special case for API1 MediaRecorder where the existing client is returned
             device = static_cast<CLIENT*>(clientTmp.get());
-            return ret;
+            return NO_ERROR;
         }
 
         // give flashlight a chance to close devices if necessary.
@@ -902,16 +863,15 @@ binder::Status CameraService::connectHelper(const sp<CALLBACK>& cameraCb, const 
         if (id == -1) {
             ALOGE("%s: Invalid camera ID %s, cannot get device version from HAL.", __FUNCTION__,
                     cameraId.string());
-            return STATUS_ERROR_FMT(ERROR_ILLEGAL_ARGUMENT,
-                    "Bad camera ID \"%s\" passed to camera open", cameraId.string());
+            return BAD_VALUE;
         }
 
         int facing = -1;
         int deviceVersion = getDeviceVersion(id, /*out*/&facing);
         sp<BasicClient> tmp = nullptr;
-        if(!(ret = makeClient(this, cameraCb, clientPackageName, id, facing, clientPid,
+        if((ret = makeClient(this, cameraCb, clientPackageName, cameraId, facing, clientPid,
                 clientUid, getpid(), legacyMode, halVersion, deviceVersion, effectiveApiLevel,
-                /*out*/&tmp)).isOk()) {
+                /*out*/&tmp)) != NO_ERROR) {
             return ret;
         }
         client = static_cast<CLIENT*>(tmp.get());
@@ -919,32 +879,9 @@ binder::Status CameraService::connectHelper(const sp<CALLBACK>& cameraCb, const 
         LOG_ALWAYS_FATAL_IF(client.get() == nullptr, "%s: CameraService in invalid state",
                 __FUNCTION__);
 
-        if ((err = client->initialize(mModule)) != OK) {
+        if ((ret = client->initialize(mModule)) != OK) {
             ALOGE("%s: Could not initialize client from HAL module.", __FUNCTION__);
-            // Errors could be from the HAL module open call or from AppOpsManager
-            switch(err) {
-                case BAD_VALUE:
-                    return STATUS_ERROR_FMT(ERROR_ILLEGAL_ARGUMENT,
-                            "Illegal argument to HAL module for camera \"%s\"", cameraId.string());
-                case -EBUSY:
-                    return STATUS_ERROR_FMT(ERROR_CAMERA_IN_USE,
-                            "Camera \"%s\" is already open", cameraId.string());
-                case -EUSERS:
-                    return STATUS_ERROR_FMT(ERROR_MAX_CAMERAS_IN_USE,
-                            "Too many cameras already open, cannot open camera \"%s\"",
-                            cameraId.string());
-                case PERMISSION_DENIED:
-                    return STATUS_ERROR_FMT(ERROR_PERMISSION_DENIED,
-                            "No permission to open camera \"%s\"", cameraId.string());
-                case -EACCES:
-                    return STATUS_ERROR_FMT(ERROR_DISABLED,
-                            "Camera \"%s\" disabled by policy", cameraId.string());
-                case -ENODEV:
-                default:
-                    return STATUS_ERROR_FMT(ERROR_INVALID_OPERATION,
-                            "Failed to initialize camera \"%s\": %s (%d)", cameraId.string(),
-                            strerror(-err), err);
-            }
+            return ret;
         }
 
         // Update shim paremeters for legacy clients
@@ -977,11 +914,8 @@ binder::Status CameraService::connectHelper(const sp<CALLBACK>& cameraCb, const 
     // Important: release the mutex here so the client can call back into the service from its
     // destructor (can be at the end of the call)
     device = client;
-    return ret;
+    return NO_ERROR;
 }
-
-#undef STATUS_ERROR_FMT
-#undef STATUS_ERROR
 
 } // namespace android
 

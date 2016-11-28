@@ -31,7 +31,7 @@
 
 #include "api2/CameraDeviceClient.h"
 
-#include "device3/Camera3Device.h"
+#include "CameraDeviceFactory.h"
 
 namespace android {
 using namespace camera2;
@@ -62,7 +62,7 @@ Camera2ClientBase<TClientBase>::Camera2ClientBase(
             String8(clientPackageName).string(), clientPid, clientUid);
 
     mInitialClientPid = clientPid;
-    mDevice = new Camera3Device(cameraId);
+    mDevice = CameraDeviceFactory::createDevice(cameraId);
     LOG_ALWAYS_FATAL_IF(mDevice == 0, "Device should never be NULL here.");
 }
 
@@ -104,8 +104,7 @@ status_t Camera2ClientBase<TClientBase>::initialize(CameraModule *module) {
         return res;
     }
 
-    wp<CameraDeviceBase::NotificationListener> weakThis(this);
-    res = mDevice->setNotifyCallback(weakThis);
+    res = mDevice->setNotifyCallback(this);
 
     return OK;
 }
@@ -170,15 +169,14 @@ status_t Camera2ClientBase<TClientBase>::dumpDevice(
 
 
 template <typename TClientBase>
-binder::Status Camera2ClientBase<TClientBase>::disconnect() {
+void Camera2ClientBase<TClientBase>::disconnect() {
     ATRACE_CALL();
     Mutex::Autolock icl(mBinderSerializationLock);
 
-    binder::Status res = binder::Status::ok();
     // Allow both client and the media server to disconnect at all times
     int callingPid = getCallingPid();
     if (callingPid != TClientBase::mClientPid &&
-        callingPid != TClientBase::mServicePid) return res;
+        callingPid != TClientBase::mServicePid) return;
 
     ALOGV("Camera %d: Shutting down", TClientBase::mCameraId);
 
@@ -187,8 +185,6 @@ binder::Status Camera2ClientBase<TClientBase>::disconnect() {
     CameraService::BasicClient::disconnect();
 
     ALOGV("Camera %d: Shut down complete complete", TClientBase::mCameraId);
-
-    return res;
 }
 
 template <typename TClientBase>
@@ -232,7 +228,7 @@ status_t Camera2ClientBase<TClientBase>::connect(
 
 template <typename TClientBase>
 void Camera2ClientBase<TClientBase>::notifyError(
-        int32_t errorCode,
+        ICameraDeviceCallbacks::CameraErrorCode errorCode,
         const CaptureResultExtras& resultExtras) {
     ALOGE("Error condition %d reported by HAL, requestId %" PRId32, errorCode,
           resultExtras.requestId);
@@ -304,14 +300,6 @@ void Camera2ClientBase<TClientBase>::notifyPrepared(int streamId) {
 
     ALOGV("%s: Stream %d now prepared",
             __FUNCTION__, streamId);
-}
-
-template <typename TClientBase>
-void Camera2ClientBase<TClientBase>::notifyRepeatingRequestError(long lastFrameNumber) {
-    (void)lastFrameNumber;
-
-    ALOGV("%s: Repeating request was stopped. Last frame number is %ld",
-            __FUNCTION__, lastFrameNumber);
 }
 
 template <typename TClientBase>

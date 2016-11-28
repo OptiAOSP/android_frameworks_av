@@ -25,7 +25,7 @@
 #include <camera/Camera.h>
 #include <camera/CameraParameters.h>
 #include <system/window.h>
-#include <hardware/camera.h>
+#include "hardware/camera.h"
 #ifdef USE_MEMORY_HEAP_ION
 #include <binder/MemoryHeapIon.h>
 #endif
@@ -76,18 +76,10 @@ typedef void (*data_callback_timestamp)(nsecs_t timestamp,
 
 class CameraHardwareInterface : public virtual RefBase {
 public:
-    CameraHardwareInterface(const char *name):
-            mDevice(nullptr),
-            mName(name),
-            mPreviewScalingMode(NOT_SET),
-            mPreviewTransform(NOT_SET),
-            mPreviewWidth(NOT_SET),
-            mPreviewHeight(NOT_SET),
-            mPreviewFormat(NOT_SET),
-            mPreviewUsage(0),
-            mPreviewSwapInterval(NOT_SET),
-            mPreviewCrop{NOT_SET,NOT_SET,NOT_SET,NOT_SET}
+    CameraHardwareInterface(const char *name)
     {
+        mDevice = 0;
+        mName = name;
     }
 
     ~CameraHardwareInterface()
@@ -105,9 +97,7 @@ public:
         ALOGI("Opening camera %s", mName.string());
         camera_info info;
         status_t res = module->getCameraInfo(atoi(mName.string()), &info);
-        if (res != OK) {
-            return res;
-        }
+        if (res != OK) return res;
 
         int rc = OK;
         if (module->getModuleApiVersion() >= CAMERA_MODULE_API_VERSION_2_3 &&
@@ -131,16 +121,9 @@ public:
     status_t setPreviewWindow(const sp<ANativeWindow>& buf)
     {
         ALOGV("%s(%s) buf %p", __FUNCTION__, mName.string(), buf.get());
+
         if (mDevice->ops->set_preview_window) {
             mPreviewWindow = buf;
-            if (buf != nullptr) {
-                if (mPreviewScalingMode != NOT_SET) {
-                    setPreviewScalingMode(mPreviewScalingMode);
-                }
-                if (mPreviewTransform != NOT_SET) {
-                    setPreviewTransform(mPreviewTransform);
-                }
-            }
             mHalPreviewWindow.user = this;
             ALOGV("%s &mHalPreviewWindow %p mHalPreviewWindow.user %p", __FUNCTION__,
                     &mHalPreviewWindow, mHalPreviewWindow.user);
@@ -148,27 +131,6 @@ public:
                     buf.get() ? &mHalPreviewWindow.nw : 0);
         }
         return INVALID_OPERATION;
-    }
-
-    status_t setPreviewScalingMode(int scalingMode)
-    {
-        int rc = OK;
-        mPreviewScalingMode = scalingMode;
-        if (mPreviewWindow != nullptr) {
-            rc = native_window_set_scaling_mode(mPreviewWindow.get(),
-                    scalingMode);
-        }
-        return rc;
-    }
-
-    status_t setPreviewTransform(int transform) {
-        int rc = OK;
-        mPreviewTransform = transform;
-        if (mPreviewWindow != nullptr) {
-            rc = native_window_set_buffers_transform(mPreviewWindow.get(),
-                    mPreviewTransform);
-        }
-        return rc;
     }
 
     /** Set the notification and data callbacks */
@@ -363,6 +325,10 @@ public:
     void releaseRecordingFrame(const sp<IMemory>& mem)
     {
         ALOGV("%s(%s)", __FUNCTION__, mName.string());
+        if (mem == NULL) {
+             ALOGE("%s: NULL memory reference", __FUNCTION__);
+             return;
+        }
         if (mDevice->ops->release_recording_frame) {
             ssize_t offset;
             size_t size;
@@ -628,8 +594,6 @@ private:
         return __this->mPreviewWindow.get();
     }
 #define anw(n) __to_anw(((struct camera_preview_window *)n)->user)
-#define hwi(n) reinterpret_cast<CameraHardwareInterface *>(\
-        ((struct camera_preview_window *)n)->user)
 
     static int __dequeue_buffer(struct preview_stream_ops* w,
                                 buffer_handle_t** buffer, int *stride)
@@ -678,44 +642,6 @@ private:
     static int __set_buffer_count(struct preview_stream_ops* w, int count)
     {
         ANativeWindow *a = anw(w);
-
-        if (a != nullptr) {
-            // Workaround for b/27039775
-            // Previously, setting the buffer count would reset the buffer
-            // queue's flag that allows for all buffers to be dequeued on the
-            // producer side, instead of just the producer's declared max count,
-            // if no filled buffers have yet been queued by the producer.  This
-            // reset no longer happens, but some HALs depend on this behavior,
-            // so it needs to be maintained for HAL backwards compatibility.
-            // Simulate the prior behavior by disconnecting/reconnecting to the
-            // window and setting the values again.  This has the drawback of
-            // actually causing memory reallocation, which may not have happened
-            // in the past.
-            CameraHardwareInterface *hw = hwi(w);
-            native_window_api_disconnect(a, NATIVE_WINDOW_API_CAMERA);
-            native_window_api_connect(a, NATIVE_WINDOW_API_CAMERA);
-            if (hw->mPreviewScalingMode != NOT_SET) {
-                native_window_set_scaling_mode(a, hw->mPreviewScalingMode);
-            }
-            if (hw->mPreviewTransform != NOT_SET) {
-                native_window_set_buffers_transform(a, hw->mPreviewTransform);
-            }
-            if (hw->mPreviewWidth != NOT_SET) {
-                native_window_set_buffers_dimensions(a,
-                        hw->mPreviewWidth, hw->mPreviewHeight);
-                native_window_set_buffers_format(a, hw->mPreviewFormat);
-            }
-            if (hw->mPreviewUsage != 0) {
-                native_window_set_usage(a, hw->mPreviewUsage);
-            }
-            if (hw->mPreviewSwapInterval != NOT_SET) {
-                a->setSwapInterval(a, hw->mPreviewSwapInterval);
-            }
-            if (hw->mPreviewCrop.left != NOT_SET) {
-                native_window_set_crop(a, &(hw->mPreviewCrop));
-            }
-        }
-
         return native_window_set_buffer_count(a, count);
     }
 
@@ -724,10 +650,7 @@ private:
     {
         int rc;
         ANativeWindow *a = anw(w);
-        CameraHardwareInterface *hw = hwi(w);
-        hw->mPreviewWidth = width;
-        hw->mPreviewHeight = height;
-        hw->mPreviewFormat = format;
+
         rc = native_window_set_buffers_dimensions(a, width, height);
         if (!rc) {
             rc = native_window_set_buffers_format(a, format);
@@ -739,12 +662,12 @@ private:
                       int left, int top, int right, int bottom)
     {
         ANativeWindow *a = anw(w);
-        CameraHardwareInterface *hw = hwi(w);
-        hw->mPreviewCrop.left = left;
-        hw->mPreviewCrop.top = top;
-        hw->mPreviewCrop.right = right;
-        hw->mPreviewCrop.bottom = bottom;
-        return native_window_set_crop(a, &(hw->mPreviewCrop));
+        android_native_rect_t crop;
+        crop.left = left;
+        crop.top = top;
+        crop.right = right;
+        crop.bottom = bottom;
+        return native_window_set_crop(a, &crop);
     }
 
     static int __set_timestamp(struct preview_stream_ops *w,
@@ -756,16 +679,12 @@ private:
     static int __set_usage(struct preview_stream_ops* w, int usage)
     {
         ANativeWindow *a = anw(w);
-        CameraHardwareInterface *hw = hwi(w);
-        hw->mPreviewUsage = usage;
         return native_window_set_usage(a, usage);
     }
 
     static int __set_swap_interval(struct preview_stream_ops *w, int interval)
     {
         ANativeWindow *a = anw(w);
-        CameraHardwareInterface *hw = hwi(w);
-        hw->mPreviewSwapInterval = interval;
         return a->setSwapInterval(a, interval);
     }
 
@@ -807,17 +726,6 @@ private:
     data_callback           mDataCb;
     data_callback_timestamp mDataCbTimestamp;
     void *mCbUser;
-
-    // Cached values for preview stream parameters
-    static const int NOT_SET = -1;
-    int mPreviewScalingMode;
-    int mPreviewTransform;
-    int mPreviewWidth;
-    int mPreviewHeight;
-    int mPreviewFormat;
-    int mPreviewUsage;
-    int mPreviewSwapInterval;
-    android_native_rect_t mPreviewCrop;
 };
 
 };  // namespace android

@@ -35,24 +35,19 @@ class MemoryHeapBase;
 namespace camera2 {
 
 class CaptureSequencer;
-struct Parameters;
+class Parameters;
 
 /***
  * Still image capture output image processing
  */
 class JpegProcessor:
-            public Thread, public CpuConsumer::FrameAvailableListener,
-            public camera3::Camera3StreamBufferListener {
+            public Thread, public CpuConsumer::FrameAvailableListener {
   public:
     JpegProcessor(sp<Camera2Client> client, wp<CaptureSequencer> sequencer);
     ~JpegProcessor();
 
     // CpuConsumer listener implementation
     void onFrameAvailable(const BufferItem& item);
-
-    // Camera3StreamBufferListener implementation
-    void onBufferAcquired(const BufferInfo& bufferInfo) override;
-    void onBufferReleased(const BufferInfo& bufferInfo) override;
 
     status_t updateStream(const Parameters &params);
     status_t deleteStream();
@@ -66,9 +61,8 @@ class JpegProcessor:
     int mId;
 
     mutable Mutex mInputMutex;
-    bool mCaptureDone;
-    bool mCaptureSuccess;
-    Condition mCaptureDoneSignal;
+    bool mCaptureAvailable;
+    Condition mCaptureAvailableSignal;
 
     enum {
         NO_STREAM = -1
@@ -81,7 +75,7 @@ class JpegProcessor:
 
     virtual bool threadLoop();
 
-    status_t processNewCapture(bool captureSuccess);
+    status_t processNewCapture();
     size_t findJpegSize(uint8_t* jpegBuffer, size_t maxSize);
 
 };

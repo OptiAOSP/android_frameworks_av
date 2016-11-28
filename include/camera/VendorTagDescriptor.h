@@ -16,7 +16,6 @@
 
 #ifndef VENDOR_TAG_DESCRIPTOR_H
 
-#include <binder/Parcelable.h>
 #include <utils/Vector.h>
 #include <utils/KeyedVector.h>
 #include <utils/String8.h>
@@ -27,26 +26,17 @@
 
 namespace android {
 
-class VendorTagDescriptor;
-
-namespace hardware {
-namespace camera2 {
-namespace params {
+class Parcel;
 
 /**
  * VendorTagDescriptor objects are parcelable containers for the vendor tag
  * definitions provided, and are typically used to pass the vendor tag
  * information enumerated by the HAL to clients of the camera service.
  */
-class VendorTagDescriptor : public Parcelable {
+class VendorTagDescriptor
+        : public LightRefBase<VendorTagDescriptor> {
     public:
         virtual ~VendorTagDescriptor();
-
-        VendorTagDescriptor();
-        VendorTagDescriptor(const VendorTagDescriptor& src);
-        VendorTagDescriptor& operator=(const VendorTagDescriptor& rhs);
-
-        void copyFrom(const VendorTagDescriptor& src);
 
         /**
          * The following 'get*' methods implement the corresponding
@@ -74,17 +64,15 @@ class VendorTagDescriptor : public Parcelable {
          *
          * Returns OK on success, or a negative error code.
          */
-        virtual status_t writeToParcel(
+        status_t writeToParcel(
                 /*out*/
-                Parcel* parcel) const override;
+                Parcel* parcel) const;
 
         /**
          * Convenience method to get a vector containing all vendor tag
          * sections, or an empty vector if none are defined.
-         * The pointer is valid for the lifetime of the VendorTagDescriptor,
-         * or until readParcel or copyFrom is invoked.
          */
-        const SortedVector<String8>* getAllSectionNames() const;
+        SortedVector<String8> getAllSectionNames() const;
 
         /**
          * Lookup the tag id for a given tag name and section.
@@ -98,14 +86,48 @@ class VendorTagDescriptor : public Parcelable {
          */
         void dump(int fd, int verbosity, int indentation) const;
 
+        // Static methods:
+
         /**
-         * Read values VendorTagDescriptor object from the given parcel.
+         * Create a VendorTagDescriptor object from the given parcel.
          *
          * Returns OK on success, or a negative error code.
          */
-        virtual status_t readFromParcel(const Parcel* parcel) override;
+        static status_t createFromParcel(const Parcel* parcel,
+                /*out*/
+                sp<VendorTagDescriptor>& descriptor);
 
+        /**
+         * Create a VendorTagDescriptor object from the given vendor_tag_ops_t
+         * struct.
+         *
+         * Returns OK on success, or a negative error code.
+         */
+        static status_t createDescriptorFromOps(const vendor_tag_ops_t* vOps,
+                /*out*/
+                sp<VendorTagDescriptor>& descriptor);
+
+        /**
+         * Sets the global vendor tag descriptor to use for this process.
+         * Camera metadata operations that access vendor tags will use the
+         * vendor tag definitions set this way.
+         *
+         * Returns OK on success, or a negative error code.
+         */
+        static status_t setAsGlobalVendorTagDescriptor(const sp<VendorTagDescriptor>& desc);
+
+        /**
+         * Clears the global vendor tag descriptor used by this process.
+         */
+        static void clearGlobalVendorTagDescriptor();
+
+        /**
+         * Returns the global vendor tag descriptor used by this process.
+         * This will contain NULL if no vendor tags are defined.
+         */
+        static sp<VendorTagDescriptor> getGlobalVendorTagDescriptor();
     protected:
+        VendorTagDescriptor();
         KeyedVector<String8, KeyedVector<String8, uint32_t>*> mReverseMapping;
         KeyedVector<uint32_t, String8> mTagToNameMap;
         KeyedVector<uint32_t, uint32_t> mTagToSectionMap; // Value is offset in mSections
@@ -113,61 +135,11 @@ class VendorTagDescriptor : public Parcelable {
         SortedVector<String8> mSections;
         // must be int32_t to be compatible with Parcel::writeInt32
         int32_t mTagCount;
-
+    private:
         vendor_tag_ops mVendorOps;
-};
-} /* namespace params */
-} /* namespace camera2 */
-} /* namespace hardware */
-
-/**
- * This version of VendorTagDescriptor must be stored in Android sp<>, and adds support for using it
- * as a global tag descriptor.
- *
- * It's a child class of the basic hardware::camera2::params::VendorTagDescriptor since basic
- * Parcelable objects cannot require being kept in an sp<> and still work with auto-generated AIDL
- * interface implementations.
- */
-class VendorTagDescriptor :
-            public ::android::hardware::camera2::params::VendorTagDescriptor,
-            public LightRefBase<VendorTagDescriptor> {
-
-  public:
-
-    /**
-     * Create a VendorTagDescriptor object from the given vendor_tag_ops_t
-     * struct.
-     *
-     * Returns OK on success, or a negative error code.
-     */
-    static status_t createDescriptorFromOps(const vendor_tag_ops_t* vOps,
-            /*out*/
-            sp<VendorTagDescriptor>& descriptor);
-
-    /**
-     * Sets the global vendor tag descriptor to use for this process.
-     * Camera metadata operations that access vendor tags will use the
-     * vendor tag definitions set this way.
-     *
-     * Returns OK on success, or a negative error code.
-     */
-    static status_t setAsGlobalVendorTagDescriptor(const sp<VendorTagDescriptor>& desc);
-
-    /**
-     * Returns the global vendor tag descriptor used by this process.
-     * This will contain NULL if no vendor tags are defined.
-     */
-    static sp<VendorTagDescriptor> getGlobalVendorTagDescriptor();
-
-    /**
-     * Clears the global vendor tag descriptor used by this process.
-     */
-    static void clearGlobalVendorTagDescriptor();
-
 };
 
 } /* namespace android */
-
 
 #define VENDOR_TAG_DESCRIPTOR_H
 #endif /* VENDOR_TAG_DESCRIPTOR_H */

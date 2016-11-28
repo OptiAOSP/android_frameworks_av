@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 The Android Open Source Project
+ * Copyright (C) 2014 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,15 @@
  * limitations under the License.
  */
 
-package android.hardware;
+#include "ZslProcessorInterface.h"
 
-/**
- * Binder interface for the camera service proxy running in system_server.
- *
- * Keep in sync with frameworks/av/include/camera/ICameraServiceProxy.h
- *
- * @hide
- */
-interface ICameraServiceProxy
-{
-    /**
-     * Ping the service proxy to update the valid users for the camera service.
-     */
-    oneway void pingForUserUpdate();
+namespace android {
+namespace camera2 {
 
-    /**
-     * Update the status of a camera device
-     */
-     oneway void notifyCameraState(String cameraId, int newCameraState);
+status_t ZslProcessorInterface::disconnect() {
+    return OK;
 }
+
+}; //namespace camera2
+}; //namespace android
+

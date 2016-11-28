@@ -24,7 +24,6 @@
 
 #include <cutils/properties.h>
 #include <gui/Surface.h>
-#include <android/hardware/camera2/ICameraDeviceCallbacks.h>
 
 #include "api1/Camera2Client.h"
 
@@ -33,6 +32,7 @@
 #include "api1/client2/CaptureSequencer.h"
 #include "api1/client2/CallbackProcessor.h"
 #include "api1/client2/ZslProcessor.h"
+#include "api1/client2/ZslProcessor3.h"
 
 #define ALOG1(...) ALOGD_IF(gLogLevel >= 1, __VA_ARGS__);
 #define ALOG2(...) ALOGD_IF(gLogLevel >= 2, __VA_ARGS__);
@@ -47,7 +47,7 @@ static int getCallingPid() {
 // Interface used by CameraService
 
 Camera2Client::Camera2Client(const sp<CameraService>& cameraService,
-        const sp<hardware::ICameraClient>& cameraClient,
+        const sp<ICameraClient>& cameraClient,
         const String16& clientPackageName,
         int cameraId,
         int cameraFacing,
@@ -94,6 +94,7 @@ status_t Camera2Client::initialize(CameraModule *module)
     mStreamingProcessor = new StreamingProcessor(this);
     threadName = String8::format("C2-%d-StreamProc",
             mCameraId);
+    mStreamingProcessor->run(threadName.string());
 
     mFrameProcessor = new FrameProcessor(mDevice, this);
     threadName = String8::format("C2-%d-FrameProc",
@@ -110,11 +111,30 @@ status_t Camera2Client::initialize(CameraModule *module)
             mCameraId);
     mJpegProcessor->run(threadName.string());
 
-    mZslProcessor = new ZslProcessor(this, mCaptureSequencer);
-
+    switch (mDeviceVersion) {
+        case CAMERA_DEVICE_API_VERSION_2_0: {
+            sp<ZslProcessor> zslProc =
+                    new ZslProcessor(this, mCaptureSequencer);
+            mZslProcessor = zslProc;
+            mZslProcessorThread = zslProc;
+            break;
+        }
+        case CAMERA_DEVICE_API_VERSION_3_0:
+        case CAMERA_DEVICE_API_VERSION_3_1:
+        case CAMERA_DEVICE_API_VERSION_3_2:
+        case CAMERA_DEVICE_API_VERSION_3_3: {
+            sp<ZslProcessor3> zslProc =
+                    new ZslProcessor3(this, mCaptureSequencer);
+            mZslProcessor = zslProc;
+            mZslProcessorThread = zslProc;
+            break;
+        }
+        default:
+            break;
+    }
     threadName = String8::format("C2-%d-ZslProc",
             mCameraId);
-    mZslProcessor->run(threadName.string());
+    mZslProcessorThread->run(threadName.string());
 
     mCallbackProcessor = new CallbackProcessor(this);
     threadName = String8::format("C2-%d-CallbkProc",
@@ -322,9 +342,6 @@ status_t Camera2Client::dumpClient(int fd, const Vector<String16>& args) {
             p.fastInfo.bestStillCaptureFpsRange[0],
             p.fastInfo.bestStillCaptureFpsRange[1]);
 
-    result.appendFormat("    Use zero shutter lag: %s\n",
-            p.useZeroShutterLag() ? "yes" : "no");
-
     result.append("  Current streams:\n");
     result.appendFormat("    Preview stream ID: %d\n",
             getPreviewStreamId());
@@ -371,16 +388,15 @@ status_t Camera2Client::dumpClient(int fd, const Vector<String16>& args) {
 
 // ICamera interface
 
-binder::Status Camera2Client::disconnect() {
+void Camera2Client::disconnect() {
     ATRACE_CALL();
     Mutex::Autolock icl(mBinderSerializationLock);
 
-    binder::Status res = binder::Status::ok();
-    // Allow both client and the cameraserver to disconnect at all times
+    // Allow both client and the media server to disconnect at all times
     int callingPid = getCallingPid();
-    if (callingPid != mClientPid && callingPid != mServicePid) return res;
+    if (callingPid != mClientPid && callingPid != mServicePid) return;
 
-    if (mDevice == 0) return res;
+    if (mDevice == 0) return;
 
     ALOGV("Camera %d: Shutting down", mCameraId);
 
@@ -394,14 +410,15 @@ binder::Status Camera2Client::disconnect() {
 
     {
         SharedParameters::Lock l(mParameters);
-        if (l.mParameters.state == Parameters::DISCONNECTED) return res;
+        if (l.mParameters.state == Parameters::DISCONNECTED) return;
         l.mParameters.state = Parameters::DISCONNECTED;
     }
 
+    mStreamingProcessor->requestExit();
     mFrameProcessor->requestExit();
     mCaptureSequencer->requestExit();
     mJpegProcessor->requestExit();
-    mZslProcessor->requestExit();
+    mZslProcessorThread->requestExit();
     mCallbackProcessor->requestExit();
 
     ALOGV("Camera %d: Waiting for threads", mCameraId);
@@ -411,10 +428,11 @@ binder::Status Camera2Client::disconnect() {
         // complete callbacks that re-enter Camera2Client
         mBinderSerializationLock.unlock();
 
+        mStreamingProcessor->join();
         mFrameProcessor->join();
         mCaptureSequencer->join();
         mJpegProcessor->join();
-        mZslProcessor->join();
+        mZslProcessorThread->join();
         mCallbackProcessor->join();
 
         mBinderSerializationLock.lock();
@@ -428,6 +446,9 @@ binder::Status Camera2Client::disconnect() {
     mCallbackProcessor->deleteStream();
     mZslProcessor->deleteStream();
 
+    // Remove all ZSL stream state before disconnect; needed to work around b/15408128.
+    mZslProcessor->disconnect();
+
     ALOGV("Camera %d: Disconnecting device", mCameraId);
 
     mDevice->disconnect();
@@ -435,11 +456,9 @@ binder::Status Camera2Client::disconnect() {
     mDevice.clear();
 
     CameraService::Client::disconnect();
-
-    return res;
 }
 
-status_t Camera2Client::connect(const sp<hardware::ICameraClient>& client) {
+status_t Camera2Client::connect(const sp<ICameraClient>& client) {
     ATRACE_CALL();
     ALOGV("%s: E", __FUNCTION__);
     Mutex::Autolock icl(mBinderSerializationLock);
@@ -746,8 +765,8 @@ status_t Camera2Client::startPreviewL(Parameters &params, bool restart) {
 
     // We could wait to create the JPEG output stream until first actual use
     // (first takePicture call). However, this would substantially increase the
-    // first capture latency on HAL3 devices.
-    // So create it unconditionally at preview start. As a drawback,
+    // first capture latency on HAL3 devices, and potentially on some HAL2
+    // devices. So create it unconditionally at preview start. As a drawback,
     // this increases gralloc memory consumption for applications that don't
     // ever take a picture. Do not enter this mode when jpeg stream will slow
     // down preview.
@@ -816,7 +835,7 @@ status_t Camera2Client::startPreviewL(Parameters &params, bool restart) {
         }
     }
 
-    if (params.useZeroShutterLag() &&
+    if (params.zslMode && !params.recordingHint &&
             getRecordingStreamId() == NO_STREAM) {
         res = updateProcessorStream(mZslProcessor, params);
         if (res != OK) {
@@ -952,7 +971,7 @@ bool Camera2Client::previewEnabled() {
     return l.mParameters.state == Parameters::PREVIEW;
 }
 
-status_t Camera2Client::setVideoBufferMode(int32_t videoBufferMode) {
+status_t Camera2Client::storeMetaDataInBuffers(bool enabled) {
     ATRACE_CALL();
     Mutex::Autolock icl(mBinderSerializationLock);
     status_t res;
@@ -971,12 +990,7 @@ status_t Camera2Client::setVideoBufferMode(int32_t videoBufferMode) {
             break;
     }
 
-    if (videoBufferMode != VIDEO_BUFFER_MODE_BUFFER_QUEUE) {
-        ALOGE("%s: %d: Only video buffer queue is supported", __FUNCTION__, __LINE__);
-        return BAD_VALUE;
-    }
-
-    l.mParameters.videoBufferMode = videoBufferMode;
+    l.mParameters.storeMetadataInBuffers = enabled;
 
     return OK;
 }
@@ -1022,14 +1036,10 @@ status_t Camera2Client::startRecordingL(Parameters &params, bool restart) {
             return INVALID_OPERATION;
     };
 
-    if (params.videoBufferMode != VIDEO_BUFFER_MODE_BUFFER_QUEUE) {
-        ALOGE("%s: Camera %d: Recording only supported buffer queue mode, but "
-                "mode %d is requested!", __FUNCTION__, mCameraId, params.videoBufferMode);
-        return INVALID_OPERATION;
-    }
-
-    if (!mStreamingProcessor->haveValidRecordingWindow()) {
-        ALOGE("%s: No valid recording window", __FUNCTION__);
+    if (!params.storeMetadataInBuffers) {
+        ALOGE("%s: Camera %d: Recording only supported in metadata mode, but "
+                "non-metadata recording mode requested!", __FUNCTION__,
+                mCameraId);
         return INVALID_OPERATION;
     }
 
@@ -1063,33 +1073,35 @@ status_t Camera2Client::startRecordingL(Parameters &params, bool restart) {
         }
     }
 
-    // Clean up ZSL before transitioning into recording
-    if (mZslProcessor->getStreamId() != NO_STREAM) {
-        ALOGV("%s: Camera %d: Clearing out zsl stream before "
-                "creating recording stream", __FUNCTION__, mCameraId);
-        res = mStreamingProcessor->stopStream();
-        if (res != OK) {
-            ALOGE("%s: Camera %d: Can't stop streaming to delete callback stream",
-                    __FUNCTION__, mCameraId);
-            return res;
-        }
-        res = mDevice->waitUntilDrained();
-        if (res != OK) {
-            ALOGE("%s: Camera %d: Waiting to stop streaming failed: %s (%d)",
-                    __FUNCTION__, mCameraId, strerror(-res), res);
-        }
-        res = mZslProcessor->clearZslQueue();
-        if (res != OK) {
-            ALOGE("%s: Camera %d: Can't clear zsl queue",
-                    __FUNCTION__, mCameraId);
-            return res;
-        }
-        res = mZslProcessor->deleteStream();
-        if (res != OK) {
-            ALOGE("%s: Camera %d: Unable to delete zsl stream before "
-                    "record: %s (%d)", __FUNCTION__, mCameraId,
-                    strerror(-res), res);
-            return res;
+    // On current HALs, clean up ZSL before transitioning into recording
+    if (mDeviceVersion != CAMERA_DEVICE_API_VERSION_2_0) {
+        if (mZslProcessor->getStreamId() != NO_STREAM) {
+            ALOGV("%s: Camera %d: Clearing out zsl stream before "
+                    "creating recording stream", __FUNCTION__, mCameraId);
+            res = mStreamingProcessor->stopStream();
+            if (res != OK) {
+                ALOGE("%s: Camera %d: Can't stop streaming to delete callback stream",
+                        __FUNCTION__, mCameraId);
+                return res;
+            }
+            res = mDevice->waitUntilDrained();
+            if (res != OK) {
+                ALOGE("%s: Camera %d: Waiting to stop streaming failed: %s (%d)",
+                        __FUNCTION__, mCameraId, strerror(-res), res);
+            }
+            res = mZslProcessor->clearZslQueue();
+            if (res != OK) {
+                ALOGE("%s: Camera %d: Can't clear zsl queue",
+                        __FUNCTION__, mCameraId);
+                return res;
+            }
+            res = mZslProcessor->deleteStream();
+            if (res != OK) {
+                ALOGE("%s: Camera %d: Unable to delete zsl stream before "
+                        "record: %s (%d)", __FUNCTION__, mCameraId,
+                        strerror(-res), res);
+                return res;
+            }
         }
     }
 
@@ -1097,43 +1109,56 @@ status_t Camera2Client::startRecordingL(Parameters &params, bool restart) {
     // and we can't fail record start without stagefright asserting.
     params.previewCallbackFlags = 0;
 
-    // May need to reconfigure video snapshot JPEG sizes
-    // during recording startup, so need a more complex sequence here to
-    // ensure an early stream reconfiguration doesn't happen
-    bool recordingStreamNeedsUpdate;
-    res = mStreamingProcessor->recordingStreamNeedsUpdate(params, &recordingStreamNeedsUpdate);
-    if (res != OK) {
-        ALOGE("%s: Camera %d: Can't query recording stream",
-                __FUNCTION__, mCameraId);
-        return res;
-    }
-
-    if (recordingStreamNeedsUpdate) {
-        // Need to stop stream here so updateProcessorStream won't trigger configureStream
-        // Right now camera device cannot handle configureStream failure gracefully
-        // when device is streaming
-        res = mStreamingProcessor->stopStream();
+    if (mDeviceVersion != CAMERA_DEVICE_API_VERSION_2_0) {
+        // For newer devices, may need to reconfigure video snapshot JPEG sizes
+        // during recording startup, so need a more complex sequence here to
+        // ensure an early stream reconfiguration doesn't happen
+        bool recordingStreamNeedsUpdate;
+        res = mStreamingProcessor->recordingStreamNeedsUpdate(params, &recordingStreamNeedsUpdate);
         if (res != OK) {
-            ALOGE("%s: Camera %d: Can't stop streaming to update record "
-                    "stream", __FUNCTION__, mCameraId);
+            ALOGE("%s: Camera %d: Can't query recording stream",
+                    __FUNCTION__, mCameraId);
             return res;
         }
-        res = mDevice->waitUntilDrained();
-        if (res != OK) {
-            ALOGE("%s: Camera %d: Waiting to stop streaming failed: "
-                    "%s (%d)", __FUNCTION__, mCameraId,
-                    strerror(-res), res);
-        }
 
+        if (recordingStreamNeedsUpdate) {
+            // Need to stop stream here so updateProcessorStream won't trigger configureStream
+            // Right now camera device cannot handle configureStream failure gracefully
+            // when device is streaming
+            res = mStreamingProcessor->stopStream();
+            if (res != OK) {
+                ALOGE("%s: Camera %d: Can't stop streaming to update record "
+                        "stream", __FUNCTION__, mCameraId);
+                return res;
+            }
+            res = mDevice->waitUntilDrained();
+            if (res != OK) {
+                ALOGE("%s: Camera %d: Waiting to stop streaming failed: "
+                        "%s (%d)", __FUNCTION__, mCameraId,
+                        strerror(-res), res);
+            }
+
+            res = updateProcessorStream<
+                    StreamingProcessor,
+                    &StreamingProcessor::updateRecordingStream>(
+                        mStreamingProcessor,
+                        params);
+            if (res != OK) {
+                ALOGE("%s: Camera %d: Unable to update recording stream: "
+                        "%s (%d)", __FUNCTION__, mCameraId,
+                        strerror(-res), res);
+                return res;
+            }
+        }
+    } else {
+        // Maintain call sequencing for HALv2 devices.
         res = updateProcessorStream<
-            StreamingProcessor,
-            &StreamingProcessor::updateRecordingStream>(
-                                                        mStreamingProcessor,
-                                                        params);
+                StreamingProcessor,
+                &StreamingProcessor::updateRecordingStream>(mStreamingProcessor,
+                    params);
         if (res != OK) {
-            ALOGE("%s: Camera %d: Unable to update recording stream: "
-                    "%s (%d)", __FUNCTION__, mCameraId,
-                    strerror(-res), res);
+            ALOGE("%s: Camera %d: Unable to update recording stream: %s (%d)",
+                    __FUNCTION__, mCameraId, strerror(-res), res);
             return res;
         }
     }
@@ -1193,28 +1218,28 @@ void Camera2Client::stopRecording() {
 
     mCameraService->playSound(CameraService::SOUND_RECORDING_STOP);
 
-    // Remove recording stream because the video target may be abandoned soon.
-    res = stopStream();
-    if (res != OK) {
-        ALOGE("%s: Camera %d: Can't stop streaming: %s (%d)",
-                __FUNCTION__, mCameraId, strerror(-res), res);
+    // Remove recording stream to prevent it from slowing down takePicture later
+    if (!l.mParameters.recordingHint && l.mParameters.isJpegSizeOverridden()) {
+        res = stopStream();
+        if (res != OK) {
+            ALOGE("%s: Camera %d: Can't stop streaming: %s (%d)",
+                    __FUNCTION__, mCameraId, strerror(-res), res);
+        }
+        res = mDevice->waitUntilDrained();
+        if (res != OK) {
+            ALOGE("%s: Camera %d: Waiting to stop streaming failed: %s (%d)",
+                    __FUNCTION__, mCameraId, strerror(-res), res);
+        }
+        // Clean up recording stream
+        res = mStreamingProcessor->deleteRecordingStream();
+        if (res != OK) {
+            ALOGE("%s: Camera %d: Unable to delete recording stream before "
+                    "stop preview: %s (%d)",
+                    __FUNCTION__, mCameraId, strerror(-res), res);
+        }
+        l.mParameters.recoverOverriddenJpegSize();
     }
 
-    res = mDevice->waitUntilDrained();
-    if (res != OK) {
-        ALOGE("%s: Camera %d: Waiting to stop streaming failed: %s (%d)",
-                __FUNCTION__, mCameraId, strerror(-res), res);
-    }
-    // Clean up recording stream
-    res = mStreamingProcessor->deleteRecordingStream();
-    if (res != OK) {
-        ALOGE("%s: Camera %d: Unable to delete recording stream before "
-                "stop preview: %s (%d)",
-                __FUNCTION__, mCameraId, strerror(-res), res);
-    }
-    l.mParameters.recoverOverriddenJpegSize();
-
-    // Restart preview
     res = startPreviewL(l.mParameters, true);
     if (res != OK) {
         ALOGE("%s: Camera %d: Unable to return to preview",
@@ -1240,15 +1265,11 @@ bool Camera2Client::recordingEnabledL() {
 }
 
 void Camera2Client::releaseRecordingFrame(const sp<IMemory>& mem) {
-    (void)mem;
     ATRACE_CALL();
-    ALOGW("%s: Not supported in buffer queue mode.", __FUNCTION__);
-}
+    Mutex::Autolock icl(mBinderSerializationLock);
+    if ( checkPid(__FUNCTION__) != OK) return;
 
-void Camera2Client::releaseRecordingFrameHandle(native_handle_t *handle) {
-    (void)handle;
-    ATRACE_CALL();
-    ALOGW("%s: Not supported in buffer queue mode.", __FUNCTION__);
+    mStreamingProcessor->releaseRecordingFrame(mem);
 }
 
 status_t Camera2Client::autoFocus() {
@@ -1365,7 +1386,7 @@ status_t Camera2Client::cancelAutoFocus() {
 
             return OK;
         }
-        if (l.mParameters.allowZslMode) {
+        if (l.mParameters.zslMode) {
             mZslProcessor->clearZslQueue();
         }
     }
@@ -1463,7 +1484,7 @@ status_t Camera2Client::takePicture(int msgType) {
 
         // Clear ZSL buffer queue when Jpeg size is changed.
         bool jpegStreamChanged = mJpegProcessor->getStreamId() != lastJpegStreamId;
-        if (l.mParameters.allowZslMode && jpegStreamChanged) {
+        if (l.mParameters.zslMode && jpegStreamChanged) {
             ALOGV("%s: Camera %d: Clear ZSL buffer queue when Jpeg size is changed",
                     __FUNCTION__, mCameraId);
             mZslProcessor->clearZslQueue();
@@ -1498,7 +1519,7 @@ status_t Camera2Client::setParameters(const String8& params) {
     if (res != OK) return res;
     Parameters::focusMode_t focusModeAfter = l.mParameters.focusMode;
 
-    if (l.mParameters.allowZslMode && focusModeAfter != focusModeBefore) {
+    if (l.mParameters.zslMode && focusModeAfter != focusModeBefore) {
         mZslProcessor->clearZslQueue();
     }
 
@@ -1550,10 +1571,10 @@ status_t Camera2Client::sendCommand(int32_t cmd, int32_t arg1, int32_t arg2) {
         case CAMERA_CMD_PING:
             return commandPingL();
         case CAMERA_CMD_SET_VIDEO_BUFFER_COUNT:
+            return commandSetVideoBufferCountL(arg1);
         case CAMERA_CMD_SET_VIDEO_FORMAT:
-            ALOGE("%s: command %d (arguments %d, %d) is not supported.",
-                    __FUNCTION__, cmd, arg1, arg2);
-            return BAD_VALUE;
+            return commandSetVideoFormatL(arg1,
+                    static_cast<android_dataspace>(arg2));
         default:
             ALOGE("%s: Unknown command %d (arguments %d, %d)",
                     __FUNCTION__, cmd, arg1, arg2);
@@ -1695,20 +1716,41 @@ status_t Camera2Client::commandPingL() {
     }
 }
 
-void Camera2Client::notifyError(int32_t errorCode,
+status_t Camera2Client::commandSetVideoBufferCountL(size_t count) {
+    if (recordingEnabledL()) {
+        ALOGE("%s: Camera %d: Error setting video buffer count after "
+                "recording was started", __FUNCTION__, mCameraId);
+        return INVALID_OPERATION;
+    }
+
+    return mStreamingProcessor->setRecordingBufferCount(count);
+}
+
+status_t Camera2Client::commandSetVideoFormatL(int format,
+        android_dataspace dataspace) {
+    if (recordingEnabledL()) {
+        ALOGE("%s: Camera %d: Error setting video format after "
+                "recording was started", __FUNCTION__, mCameraId);
+        return INVALID_OPERATION;
+    }
+
+    return mStreamingProcessor->setRecordingFormat(format, dataspace);
+}
+
+void Camera2Client::notifyError(ICameraDeviceCallbacks::CameraErrorCode errorCode,
         const CaptureResultExtras& resultExtras) {
     int32_t err = CAMERA_ERROR_UNKNOWN;
     switch(errorCode) {
-        case hardware::camera2::ICameraDeviceCallbacks::ERROR_CAMERA_DISCONNECTED:
+        case ICameraDeviceCallbacks::ERROR_CAMERA_DISCONNECTED:
             err = CAMERA_ERROR_RELEASED;
             break;
-        case hardware::camera2::ICameraDeviceCallbacks::ERROR_CAMERA_DEVICE:
-        case hardware::camera2::ICameraDeviceCallbacks::ERROR_CAMERA_SERVICE:
+        case ICameraDeviceCallbacks::ERROR_CAMERA_DEVICE:
+        case ICameraDeviceCallbacks::ERROR_CAMERA_SERVICE:
             err = CAMERA_ERROR_SERVER_DIED;
             break;
-        case hardware::camera2::ICameraDeviceCallbacks::ERROR_CAMERA_REQUEST:
-        case hardware::camera2::ICameraDeviceCallbacks::ERROR_CAMERA_RESULT:
-        case hardware::camera2::ICameraDeviceCallbacks::ERROR_CAMERA_BUFFER:
+        case ICameraDeviceCallbacks::ERROR_CAMERA_REQUEST:
+        case ICameraDeviceCallbacks::ERROR_CAMERA_RESULT:
+        case ICameraDeviceCallbacks::ERROR_CAMERA_BUFFER:
             ALOGW("%s: Received recoverable error %d from HAL - ignoring, requestId %" PRId32,
                     __FUNCTION__, errorCode, resultExtras.requestId);
             return;
@@ -2114,84 +2156,6 @@ status_t Camera2Client::overrideVideoSnapshotSize(Parameters &params) {
                 __FUNCTION__, mCameraId, strerror(-res), res);
     }
     return res;
-}
-
-status_t Camera2Client::setVideoTarget(const sp<IGraphicBufferProducer>& bufferProducer) {
-    ATRACE_CALL();
-    ALOGV("%s: E", __FUNCTION__);
-    Mutex::Autolock icl(mBinderSerializationLock);
-    status_t res;
-    if ( (res = checkPid(__FUNCTION__) ) != OK) return res;
-
-    sp<IBinder> binder = IInterface::asBinder(bufferProducer);
-    if (binder == mVideoSurface) {
-        ALOGV("%s: Camera %d: New video window is same as old video window",
-                __FUNCTION__, mCameraId);
-        return NO_ERROR;
-    }
-
-    sp<Surface> window;
-    int format;
-    android_dataspace dataSpace;
-
-    if (bufferProducer != nullptr) {
-        // Using controlledByApp flag to ensure that the buffer queue remains in
-        // async mode for the old camera API, where many applications depend
-        // on that behavior.
-        window = new Surface(bufferProducer, /*controlledByApp*/ true);
-
-        ANativeWindow *anw = window.get();
-
-        if ((res = anw->query(anw, NATIVE_WINDOW_FORMAT, &format)) != OK) {
-            ALOGE("%s: Failed to query Surface format", __FUNCTION__);
-            return res;
-        }
-
-        if ((res = anw->query(anw, NATIVE_WINDOW_DEFAULT_DATASPACE,
-                                reinterpret_cast<int*>(&dataSpace))) != OK) {
-            ALOGE("%s: Failed to query Surface dataSpace", __FUNCTION__);
-            return res;
-        }
-    }
-
-    Parameters::State state;
-    {
-        SharedParameters::Lock l(mParameters);
-        state = l.mParameters.state;
-    }
-
-    switch (state) {
-        case Parameters::STOPPED:
-        case Parameters::WAITING_FOR_PREVIEW_WINDOW:
-        case Parameters::PREVIEW:
-            // OK
-            break;
-        case Parameters::DISCONNECTED:
-        case Parameters::RECORD:
-        case Parameters::STILL_CAPTURE:
-        case Parameters::VIDEO_SNAPSHOT:
-        default:
-            ALOGE("%s: Camera %d: Cannot set video target while in state %s",
-                    __FUNCTION__, mCameraId,
-                    Parameters::getStateName(state));
-            return INVALID_OPERATION;
-    }
-
-    mVideoSurface = binder;
-    res = mStreamingProcessor->setRecordingWindow(window);
-    if (res != OK) {
-        ALOGE("%s: Unable to set new recording window: %s (%d)",
-                __FUNCTION__, strerror(-res), res);
-        return res;
-    }
-
-    {
-        SharedParameters::Lock l(mParameters);
-        l.mParameters.videoFormat = format;
-        l.mParameters.videoDataSpace = dataSpace;
-    }
-
-    return OK;
 }
 
 const char* Camera2Client::kAutofocusLabel = "autofocus";

@@ -32,15 +32,12 @@
 #include <hardware/gralloc.h>
 
 #include <camera/CameraMetadata.h>
-#include <android/hardware/ICameraService.h>
-#include <android/hardware/ICameraServiceListener.h>
-#include <android/hardware/BnCameraServiceListener.h>
-#include <android/hardware/camera2/ICameraDeviceUser.h>
-#include <android/hardware/camera2/ICameraDeviceCallbacks.h>
-#include <android/hardware/camera2/BnCameraDeviceCallbacks.h>
+#include <camera/ICameraService.h>
+#include <camera/ICameraServiceListener.h>
 #include <camera/camera2/CaptureRequest.h>
+#include <camera/camera2/ICameraDeviceUser.h>
+#include <camera/camera2/ICameraDeviceCallbacks.h>
 #include <camera/camera2/OutputConfiguration.h>
-#include <camera/camera2/SubmitInfo.h>
 
 #include <gui/BufferItemConsumer.h>
 #include <gui/IGraphicBufferProducer.h>
@@ -63,27 +60,25 @@ using namespace android;
 #define IDLE_TIMEOUT 2000000000 // ns
 
 // Stub listener implementation
-class TestCameraServiceListener : public hardware::BnCameraServiceListener {
-    std::map<String16, int32_t> mCameraTorchStatuses;
-    std::map<int32_t, int32_t> mCameraStatuses;
+class TestCameraServiceListener : public BnCameraServiceListener {
+    std::map<String16, TorchStatus> mCameraTorchStatuses;
+    std::map<int32_t, Status> mCameraStatuses;
     mutable Mutex mLock;
     mutable Condition mCondition;
     mutable Condition mTorchCondition;
 public:
     virtual ~TestCameraServiceListener() {};
 
-    virtual binder::Status onStatusChanged(int32_t status, int32_t cameraId) {
+    virtual void onStatusChanged(Status status, int32_t cameraId) {
         Mutex::Autolock l(mLock);
         mCameraStatuses[cameraId] = status;
         mCondition.broadcast();
-        return binder::Status::ok();
     };
 
-    virtual binder::Status onTorchStatusChanged(int32_t status, const String16& cameraId) {
+    virtual void onTorchStatusChanged(TorchStatus status, const String16& cameraId) {
         Mutex::Autolock l(mLock);
         mCameraTorchStatuses[cameraId] = status;
         mTorchCondition.broadcast();
-        return binder::Status::ok();
     };
 
     bool waitForNumCameras(size_t num) const {
@@ -101,7 +96,7 @@ public:
         return true;
     };
 
-    bool waitForTorchState(int32_t status, int32_t cameraId) const {
+    bool waitForTorchState(TorchStatus status, int32_t cameraId) const {
         Mutex::Autolock l(mLock);
 
         const auto& iter = mCameraTorchStatuses.find(String16(String8::format("%d", cameraId)));
@@ -121,27 +116,27 @@ public:
         return true;
     };
 
-    int32_t getTorchStatus(int32_t cameraId) const {
+    TorchStatus getTorchStatus(int32_t cameraId) const {
         Mutex::Autolock l(mLock);
         const auto& iter = mCameraTorchStatuses.find(String16(String8::format("%d", cameraId)));
         if (iter == mCameraTorchStatuses.end()) {
-            return hardware::ICameraServiceListener::TORCH_STATUS_UNKNOWN;
+            return ICameraServiceListener::TORCH_STATUS_UNKNOWN;
         }
         return iter->second;
     };
 
-    int32_t getStatus(int32_t cameraId) const {
+    Status getStatus(int32_t cameraId) const {
         Mutex::Autolock l(mLock);
         const auto& iter = mCameraStatuses.find(cameraId);
         if (iter == mCameraStatuses.end()) {
-            return hardware::ICameraServiceListener::STATUS_UNKNOWN;
+            return ICameraServiceListener::STATUS_UNKNOWN;
         }
         return iter->second;
     };
 };
 
 // Callback implementation
-class TestCameraDeviceCallbacks : public hardware::camera2::BnCameraDeviceCallbacks {
+class TestCameraDeviceCallbacks : public BnCameraDeviceCallbacks {
 public:
     enum Status {
         IDLE,
@@ -149,14 +144,13 @@ public:
         PREPARED,
         RUNNING,
         SENT_RESULT,
-        UNINITIALIZED,
-        REPEATING_REQUEST_ERROR,
+        UNINITIALIZED
     };
 
 protected:
     bool mError;
-    int32_t mLastStatus;
-    mutable std::vector<int32_t> mStatusesHit;
+    Status mLastStatus;
+    mutable std::vector<Status> mStatusesHit;
     mutable Mutex mLock;
     mutable Condition mStatusCondition;
 public:
@@ -164,65 +158,45 @@ public:
 
     virtual ~TestCameraDeviceCallbacks() {}
 
-    virtual binder::Status onDeviceError(int errorCode,
+    virtual void onDeviceError(CameraErrorCode errorCode,
             const CaptureResultExtras& resultExtras) {
-        (void) resultExtras;
         ALOGE("%s: onDeviceError occurred with: %d", __FUNCTION__, static_cast<int>(errorCode));
         Mutex::Autolock l(mLock);
         mError = true;
         mLastStatus = ERROR;
         mStatusesHit.push_back(mLastStatus);
         mStatusCondition.broadcast();
-        return binder::Status::ok();
     }
 
-    virtual binder::Status onDeviceIdle() {
+    virtual void onDeviceIdle() {
         Mutex::Autolock l(mLock);
         mLastStatus = IDLE;
         mStatusesHit.push_back(mLastStatus);
         mStatusCondition.broadcast();
-        return binder::Status::ok();
     }
 
-    virtual binder::Status onCaptureStarted(const CaptureResultExtras& resultExtras,
+    virtual void onCaptureStarted(const CaptureResultExtras& resultExtras,
             int64_t timestamp) {
-        (void) resultExtras;
-        (void) timestamp;
         Mutex::Autolock l(mLock);
         mLastStatus = RUNNING;
         mStatusesHit.push_back(mLastStatus);
         mStatusCondition.broadcast();
-        return binder::Status::ok();
     }
 
 
-    virtual binder::Status onResultReceived(const CameraMetadata& metadata,
+    virtual void onResultReceived(const CameraMetadata& metadata,
             const CaptureResultExtras& resultExtras) {
-        (void) metadata;
-        (void) resultExtras;
         Mutex::Autolock l(mLock);
         mLastStatus = SENT_RESULT;
         mStatusesHit.push_back(mLastStatus);
         mStatusCondition.broadcast();
-        return binder::Status::ok();
     }
 
-    virtual binder::Status onPrepared(int streamId) {
-        (void) streamId;
+    virtual void onPrepared(int streamId) {
         Mutex::Autolock l(mLock);
         mLastStatus = PREPARED;
         mStatusesHit.push_back(mLastStatus);
         mStatusCondition.broadcast();
-        return binder::Status::ok();
-    }
-
-    virtual binder::Status onRepeatingRequestError(int64_t lastFrameNumber) {
-        (void) lastFrameNumber;
-        Mutex::Autolock l(mLock);
-        mLastStatus = REPEATING_REQUEST_ERROR;
-        mStatusesHit.push_back(mLastStatus);
-        mStatusCondition.broadcast();
-        return binder::Status::ok();
     }
 
     // Test helper functions:
@@ -263,132 +237,95 @@ public:
 
 };
 
-namespace {
-    Mutex                     gLock;
-    class DeathNotifier : public IBinder::DeathRecipient
-    {
-    public:
-        DeathNotifier() {}
-
-        virtual void binderDied(const wp<IBinder>& /*who*/) {
-            ALOGV("binderDied");
-            Mutex::Autolock _l(gLock);
-            ALOGW("Camera service died!");
-        }
-    };
-    sp<DeathNotifier>         gDeathNotifier;
-}; // anonymous namespace
-
 // Exercise basic binder calls for the camera service
 TEST(CameraServiceBinderTest, CheckBinderCameraService) {
     ProcessState::self()->startThreadPool();
     sp<IServiceManager> sm = defaultServiceManager();
     sp<IBinder> binder = sm->getService(String16("media.camera"));
     ASSERT_NOT_NULL(binder);
-    if (gDeathNotifier == NULL) {
-        gDeathNotifier = new DeathNotifier();
-    }
-    binder->linkToDeath(gDeathNotifier);
-    sp<hardware::ICameraService> service =
-            interface_cast<hardware::ICameraService>(binder);
+    sp<ICameraService> service = interface_cast<ICameraService>(binder);
 
-    binder::Status res;
 
-    int32_t numCameras = 0;
-    res = service->getNumberOfCameras(hardware::ICameraService::CAMERA_TYPE_ALL, &numCameras);
-    EXPECT_TRUE(res.isOk()) << res;
+    int32_t numCameras = service->getNumberOfCameras();
     EXPECT_LE(0, numCameras);
 
     // Check listener binder calls
     sp<TestCameraServiceListener> listener(new TestCameraServiceListener());
-    res = service->addListener(listener);
-    EXPECT_TRUE(res.isOk()) << res;
+    EXPECT_EQ(OK, service->addListener(listener));
 
     EXPECT_TRUE(listener->waitForNumCameras(numCameras));
 
     for (int32_t i = 0; i < numCameras; i++) {
-        bool isSupported = false;
-        res = service->supportsCameraApi(i,
-                hardware::ICameraService::API_VERSION_2, &isSupported);
-        EXPECT_TRUE(res.isOk()) << res;
-
         // We only care about binder calls for the Camera2 API.  Camera1 is deprecated.
-        if (!isSupported) {
+        status_t camera2Support = service->supportsCameraApi(i, ICameraService::API_VERSION_2);
+        if (camera2Support != OK) {
+            EXPECT_EQ(-EOPNOTSUPP, camera2Support);
             continue;
         }
 
         // Check metadata binder call
         CameraMetadata metadata;
-        res = service->getCameraCharacteristics(i, &metadata);
-        EXPECT_TRUE(res.isOk()) << res;
+        EXPECT_EQ(OK, service->getCameraCharacteristics(i, &metadata));
         EXPECT_FALSE(metadata.isEmpty());
 
         // Make sure we're available, or skip device tests otherwise
-        int32_t s = listener->getStatus(i);
-        EXPECT_EQ(::android::hardware::ICameraServiceListener::STATUS_PRESENT, s);
-        if (s != ::android::hardware::ICameraServiceListener::STATUS_PRESENT) {
+        ICameraServiceListener::Status s = listener->getStatus(i);
+        EXPECT_EQ(ICameraServiceListener::STATUS_AVAILABLE, s);
+        if (s != ICameraServiceListener::STATUS_AVAILABLE) {
             continue;
         }
 
         // Check connect binder calls
         sp<TestCameraDeviceCallbacks> callbacks(new TestCameraDeviceCallbacks());
-        sp<hardware::camera2::ICameraDeviceUser> device;
-        res = service->connectDevice(callbacks, i, String16("meeeeeeeee!"),
-                hardware::ICameraService::USE_CALLING_UID, /*out*/&device);
-        EXPECT_TRUE(res.isOk()) << res;
+        sp<ICameraDeviceUser> device;
+        EXPECT_EQ(OK, service->connectDevice(callbacks, i, String16("meeeeeeeee!"),
+                ICameraService::USE_CALLING_UID, /*out*/device));
         ASSERT_NE(nullptr, device.get());
         device->disconnect();
         EXPECT_FALSE(callbacks->hadError());
 
-        int32_t torchStatus = listener->getTorchStatus(i);
-        if (torchStatus == hardware::ICameraServiceListener::TORCH_STATUS_AVAILABLE_OFF) {
+        ICameraServiceListener::TorchStatus torchStatus = listener->getTorchStatus(i);
+        if (torchStatus == ICameraServiceListener::TORCH_STATUS_AVAILABLE_OFF) {
             // Check torch calls
-            res = service->setTorchMode(String16(String8::format("%d", i)),
-                    /*enabled*/true, callbacks);
-            EXPECT_TRUE(res.isOk()) << res;
+            EXPECT_EQ(OK, service->setTorchMode(String16(String8::format("%d", i)),
+                    /*enabled*/true, callbacks));
             EXPECT_TRUE(listener->waitForTorchState(
-                    hardware::ICameraServiceListener::TORCH_STATUS_AVAILABLE_ON, i));
-            res = service->setTorchMode(String16(String8::format("%d", i)),
-                    /*enabled*/false, callbacks);
-            EXPECT_TRUE(res.isOk()) << res;
+                    ICameraServiceListener::TORCH_STATUS_AVAILABLE_ON, i));
+            EXPECT_EQ(OK, service->setTorchMode(String16(String8::format("%d", i)),
+                    /*enabled*/false, callbacks));
             EXPECT_TRUE(listener->waitForTorchState(
-                    hardware::ICameraServiceListener::TORCH_STATUS_AVAILABLE_OFF, i));
+                    ICameraServiceListener::TORCH_STATUS_AVAILABLE_OFF, i));
         }
     }
 
-    res = service->removeListener(listener);
-    EXPECT_TRUE(res.isOk()) << res;
+    EXPECT_EQ(OK, service->removeListener(listener));
 }
 
 // Test fixture for client focused binder tests
 class CameraClientBinderTest : public testing::Test {
 protected:
-    sp<hardware::ICameraService> service;
+    sp<ICameraService> service;
     int32_t numCameras;
-    std::vector<std::pair<sp<TestCameraDeviceCallbacks>, sp<hardware::camera2::ICameraDeviceUser>>>
-            openDeviceList;
+    std::vector<std::pair<sp<TestCameraDeviceCallbacks>, sp<ICameraDeviceUser>>> openDeviceList;
     sp<TestCameraServiceListener> serviceListener;
 
-    std::pair<sp<TestCameraDeviceCallbacks>, sp<hardware::camera2::ICameraDeviceUser>>
-            openNewDevice(int deviceId) {
+    std::pair<sp<TestCameraDeviceCallbacks>, sp<ICameraDeviceUser>> openNewDevice(int deviceId) {
+
         sp<TestCameraDeviceCallbacks> callbacks(new TestCameraDeviceCallbacks());
-        sp<hardware::camera2::ICameraDeviceUser> device;
+        sp<ICameraDeviceUser> device;
         {
             SCOPED_TRACE("openNewDevice");
-            binder::Status res = service->connectDevice(callbacks, deviceId, String16("meeeeeeeee!"),
-                    hardware::ICameraService::USE_CALLING_UID, /*out*/&device);
-            EXPECT_TRUE(res.isOk()) << res;
+            EXPECT_EQ(OK, service->connectDevice(callbacks, deviceId, String16("meeeeeeeee!"),
+                    ICameraService::USE_CALLING_UID, /*out*/device));
         }
         auto p = std::make_pair(callbacks, device);
         openDeviceList.push_back(p);
         return p;
     }
 
-    void closeDevice(std::pair<sp<TestCameraDeviceCallbacks>,
-            sp<hardware::camera2::ICameraDeviceUser>>& p) {
+    void closeDevice(std::pair<sp<TestCameraDeviceCallbacks>, sp<ICameraDeviceUser>>& p) {
         if (p.second.get() != nullptr) {
-            binder::Status res = p.second->disconnect();
-            EXPECT_TRUE(res.isOk()) << res;
+            p.second->disconnect();
             {
                 SCOPED_TRACE("closeDevice");
                 EXPECT_FALSE(p.first->hadError());
@@ -404,11 +341,10 @@ protected:
         ProcessState::self()->startThreadPool();
         sp<IServiceManager> sm = defaultServiceManager();
         sp<IBinder> binder = sm->getService(String16("media.camera"));
-        service = interface_cast<hardware::ICameraService>(binder);
+        service = interface_cast<ICameraService>(binder);
         serviceListener = new TestCameraServiceListener();
         service->addListener(serviceListener);
-        service->getNumberOfCameras(hardware::ICameraService::CAMERA_TYPE_BACKWARD_COMPATIBLE,
-                &numCameras);
+        numCameras = service->getNumberOfCameras();
     }
 
     virtual void TearDown() {
@@ -423,19 +359,19 @@ protected:
 
 TEST_F(CameraClientBinderTest, CheckBinderCameraDeviceUser) {
     ASSERT_NOT_NULL(service);
+
     EXPECT_TRUE(serviceListener->waitForNumCameras(numCameras));
     for (int32_t i = 0; i < numCameras; i++) {
         // Make sure we're available, or skip device tests otherwise
-        int32_t s = serviceListener->getStatus(i);
-        EXPECT_EQ(hardware::ICameraServiceListener::STATUS_PRESENT, s);
-        if (s != hardware::ICameraServiceListener::STATUS_PRESENT) {
+        ICameraServiceListener::Status s = serviceListener->getStatus(i);
+        EXPECT_EQ(ICameraServiceListener::STATUS_AVAILABLE, s);
+        if (s != ICameraServiceListener::STATUS_AVAILABLE) {
             continue;
         }
-        binder::Status res;
 
         auto p = openNewDevice(i);
         sp<TestCameraDeviceCallbacks> callbacks = p.first;
-        sp<hardware::camera2::ICameraDeviceUser> device = p.second;
+        sp<ICameraDeviceUser> device = p.second;
 
         // Setup a buffer queue; I'm just using the vendor opaque format here as that is
         // guaranteed to be present
@@ -456,65 +392,50 @@ TEST_F(CameraClientBinderTest, CheckBinderCameraDeviceUser) {
         OutputConfiguration output(gbProducer, /*rotation*/0);
 
         // Can we configure?
-        res = device->beginConfigure();
-        EXPECT_TRUE(res.isOk()) << res;
-        status_t streamId;
-        res = device->createStream(output, &streamId);
-        EXPECT_TRUE(res.isOk()) << res;
+        EXPECT_EQ(OK, device->beginConfigure());
+        status_t streamId = device->createStream(output);
         EXPECT_LE(0, streamId);
-        res = device->endConfigure(/*isConstrainedHighSpeed*/ false);
-        EXPECT_TRUE(res.isOk()) << res;
+        EXPECT_EQ(OK, device->endConfigure());
         EXPECT_FALSE(callbacks->hadError());
 
         // Can we make requests?
         CameraMetadata requestTemplate;
-        res = device->createDefaultRequest(/*preview template*/1,
-                /*out*/&requestTemplate);
-        EXPECT_TRUE(res.isOk()) << res;
-
-        hardware::camera2::CaptureRequest request;
-        request.mMetadata = requestTemplate;
-        request.mSurfaceList.add(surface);
-        request.mIsReprocess = false;
+        EXPECT_EQ(OK, device->createDefaultRequest(/*preview template*/1,
+                /*out*/&requestTemplate));
+        sp<CaptureRequest> request(new CaptureRequest());
+        request->mMetadata = requestTemplate;
+        request->mSurfaceList.add(surface);
+        request->mIsReprocess = false;
         int64_t lastFrameNumber = 0;
         int64_t lastFrameNumberPrev = 0;
         callbacks->clearStatus();
-
-        hardware::camera2::utils::SubmitInfo info;
-        res = device->submitRequest(request, /*streaming*/true, /*out*/&info);
-        EXPECT_TRUE(res.isOk()) << res;
+        int requestId = device->submitRequest(request, /*streaming*/true, /*out*/&lastFrameNumber);
         EXPECT_TRUE(callbacks->waitForStatus(TestCameraDeviceCallbacks::SENT_RESULT));
-        EXPECT_LE(0, info.mRequestId);
+        EXPECT_LE(0, requestId);
 
         // Can we stop requests?
-        res = device->cancelRequest(info.mRequestId, /*out*/&lastFrameNumber);
-        EXPECT_TRUE(res.isOk()) << res;
+        EXPECT_EQ(OK, device->cancelRequest(requestId, /*out*/&lastFrameNumber));
         EXPECT_TRUE(callbacks->waitForIdle());
         EXPECT_FALSE(callbacks->hadError());
 
         // Can we do it again?
-        lastFrameNumberPrev = info.mLastFrameNumber;
+        lastFrameNumberPrev = lastFrameNumber;
         lastFrameNumber = 0;
         requestTemplate.clear();
-        res = device->createDefaultRequest(hardware::camera2::ICameraDeviceUser::TEMPLATE_PREVIEW,
-                /*out*/&requestTemplate);
-        EXPECT_TRUE(res.isOk()) << res;
-        hardware::camera2::CaptureRequest request2;
-        request2.mMetadata = requestTemplate;
-        request2.mSurfaceList.add(surface);
-        request2.mIsReprocess = false;
+        EXPECT_EQ(OK, device->createDefaultRequest(/*preview template*/1,
+                /*out*/&requestTemplate));
+        sp<CaptureRequest> request2(new CaptureRequest());
+        request2->mMetadata = requestTemplate;
+        request2->mSurfaceList.add(surface);
+        request2->mIsReprocess = false;
         callbacks->clearStatus();
-        hardware::camera2::utils::SubmitInfo info2;
-        res = device->submitRequest(request2, /*streaming*/true,
-                /*out*/&info2);
-        EXPECT_TRUE(res.isOk()) << res;
-        EXPECT_EQ(hardware::camera2::ICameraDeviceUser::NO_IN_FLIGHT_REPEATING_FRAMES,
-                info2.mLastFrameNumber);
+        int requestId2 = device->submitRequest(request2, /*streaming*/true,
+                /*out*/&lastFrameNumber);
+        EXPECT_EQ(-1, lastFrameNumber);
         lastFrameNumber = 0;
         EXPECT_TRUE(callbacks->waitForStatus(TestCameraDeviceCallbacks::SENT_RESULT));
-        EXPECT_LE(0, info2.mRequestId);
-        res = device->cancelRequest(info2.mRequestId, /*out*/&lastFrameNumber);
-        EXPECT_TRUE(res.isOk()) << res;
+        EXPECT_LE(0, requestId2);
+        EXPECT_EQ(OK, device->cancelRequest(requestId2, /*out*/&lastFrameNumber));
         EXPECT_TRUE(callbacks->waitForIdle());
         EXPECT_LE(lastFrameNumberPrev, lastFrameNumber);
         sleep(/*second*/1); // allow some time for errors to show up, if any
@@ -525,44 +446,35 @@ TEST_F(CameraClientBinderTest, CheckBinderCameraDeviceUser) {
         lastFrameNumber = 0;
         requestTemplate.clear();
         CameraMetadata requestTemplate2;
-        res = device->createDefaultRequest(hardware::camera2::ICameraDeviceUser::TEMPLATE_PREVIEW,
-                /*out*/&requestTemplate);
-        EXPECT_TRUE(res.isOk()) << res;
-        res = device->createDefaultRequest(hardware::camera2::ICameraDeviceUser::TEMPLATE_PREVIEW,
-                /*out*/&requestTemplate2);
-        EXPECT_TRUE(res.isOk()) << res;
-        android::hardware::camera2::CaptureRequest request3;
-        android::hardware::camera2::CaptureRequest request4;
-        request3.mMetadata = requestTemplate;
-        request3.mSurfaceList.add(surface);
-        request3.mIsReprocess = false;
-        request4.mMetadata = requestTemplate2;
-        request4.mSurfaceList.add(surface);
-        request4.mIsReprocess = false;
-        std::vector<hardware::camera2::CaptureRequest> requestList;
+        EXPECT_EQ(OK, device->createDefaultRequest(/*preview template*/1,
+                /*out*/&requestTemplate));
+        EXPECT_EQ(OK, device->createDefaultRequest(/*preview template*/1,
+                /*out*/&requestTemplate2));
+        sp<CaptureRequest> request3(new CaptureRequest());
+        sp<CaptureRequest> request4(new CaptureRequest());
+        request3->mMetadata = requestTemplate;
+        request3->mSurfaceList.add(surface);
+        request3->mIsReprocess = false;
+        request4->mMetadata = requestTemplate2;
+        request4->mSurfaceList.add(surface);
+        request4->mIsReprocess = false;
+        List<sp<CaptureRequest>> requestList;
         requestList.push_back(request3);
         requestList.push_back(request4);
 
         callbacks->clearStatus();
-        hardware::camera2::utils::SubmitInfo info3;
-        res = device->submitRequestList(requestList, /*streaming*/false,
-                /*out*/&info3);
-        EXPECT_TRUE(res.isOk()) << res;
-        EXPECT_LE(0, info3.mRequestId);
+        int requestId3 = device->submitRequestList(requestList, /*streaming*/false,
+                /*out*/&lastFrameNumber);
         EXPECT_TRUE(callbacks->waitForStatus(TestCameraDeviceCallbacks::SENT_RESULT));
         EXPECT_TRUE(callbacks->waitForIdle());
-        EXPECT_LE(lastFrameNumberPrev, info3.mLastFrameNumber);
+        EXPECT_LE(lastFrameNumberPrev, lastFrameNumber);
         sleep(/*second*/1); // allow some time for errors to show up, if any
         EXPECT_FALSE(callbacks->hadError());
 
         // Can we unconfigure?
-        res = device->beginConfigure();
-        EXPECT_TRUE(res.isOk()) << res;
-        res = device->deleteStream(streamId);
-        EXPECT_TRUE(res.isOk()) << res;
-        res = device->endConfigure(/*isConstrainedHighSpeed*/ false);
-        EXPECT_TRUE(res.isOk()) << res;
-
+        EXPECT_EQ(OK, device->beginConfigure());
+        EXPECT_EQ(OK, device->deleteStream(streamId));
+        EXPECT_EQ(OK, device->endConfigure());
         sleep(/*second*/1); // allow some time for errors to show up, if any
         EXPECT_FALSE(callbacks->hadError());
 

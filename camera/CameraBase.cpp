@@ -21,13 +21,12 @@
 #include <utils/threads.h>
 #include <utils/Mutex.h>
 
-#include <android/hardware/ICameraService.h>
-
 #include <binder/IPCThreadState.h>
 #include <binder/IServiceManager.h>
 #include <binder/IMemory.h>
 
 #include <camera/CameraBase.h>
+#include <camera/ICameraService.h>
 
 // needed to instantiate
 #include <camera/Camera.h>
@@ -36,28 +35,8 @@
 
 namespace android {
 
-namespace hardware {
-
-status_t CameraInfo::writeToParcel(Parcel* parcel) const {
-    status_t res;
-    res = parcel->writeInt32(facing);
-    if (res != OK) return res;
-    res = parcel->writeInt32(orientation);
-    return res;
-}
-
-status_t CameraInfo::readFromParcel(const Parcel* parcel) {
-    status_t res;
-    res = parcel->readInt32(&facing);
-    if (res != OK) return res;
-    res = parcel->readInt32(&orientation);
-    return res;
-}
-
-}
-
 namespace {
-    sp<::android::hardware::ICameraService> gCameraService;
+    sp<ICameraService>        gCameraService;
     const int                 kCameraServicePollDelay = 500000; // 0.5s
     const char*               kCameraServiceName      = "media.camera";
 
@@ -86,7 +65,7 @@ namespace {
 
 // establish binder interface to camera service
 template <typename TCam, typename TCamTraits>
-const sp<::android::hardware::ICameraService>& CameraBase<TCam, TCamTraits>::getCameraService()
+const sp<ICameraService>& CameraBase<TCam, TCamTraits>::getCameraService()
 {
     Mutex::Autolock _l(gLock);
     if (gCameraService.get() == 0) {
@@ -104,7 +83,7 @@ const sp<::android::hardware::ICameraService>& CameraBase<TCam, TCamTraits>::get
             gDeathNotifier = new DeathNotifier();
         }
         binder->linkToDeath(gDeathNotifier);
-        gCameraService = interface_cast<::android::hardware::ICameraService>(binder);
+        gCameraService = interface_cast<ICameraService>(binder);
     }
     ALOGE_IF(gCameraService == 0, "no CameraService!?");
     return gCameraService;
@@ -113,25 +92,24 @@ const sp<::android::hardware::ICameraService>& CameraBase<TCam, TCamTraits>::get
 template <typename TCam, typename TCamTraits>
 sp<TCam> CameraBase<TCam, TCamTraits>::connect(int cameraId,
                                                const String16& clientPackageName,
-                                               int clientUid, int clientPid)
+                                               int clientUid)
 {
     ALOGV("%s: connect", __FUNCTION__);
     sp<TCam> c = new TCam(cameraId);
     sp<TCamCallbacks> cl = c;
-    const sp<::android::hardware::ICameraService>& cs = getCameraService();
+    status_t status = NO_ERROR;
+    const sp<ICameraService>& cs = getCameraService();
 
-    binder::Status ret;
-    if (cs != nullptr) {
+    if (cs != 0) {
         TCamConnectService fnConnectService = TCamTraits::fnConnectService;
-        ret = (cs.get()->*fnConnectService)(cl, cameraId, clientPackageName, clientUid,
-                                               clientPid, /*out*/ &c->mCamera);
+        status = (cs.get()->*fnConnectService)(cl, cameraId, clientPackageName, clientUid,
+                                             /*out*/ c->mCamera);
     }
-    if (ret.isOk() && c->mCamera != nullptr) {
+    if (status == OK && c->mCamera != 0) {
         IInterface::asBinder(c->mCamera)->linkToDeath(c);
         c->mStatus = NO_ERROR;
     } else {
-        ALOGW("An error occurred while connecting to camera %d: %s", cameraId,
-                (cs != nullptr) ? "Service not available" : ret.toString8().string());
+        ALOGW("An error occurred while connecting to camera: %d", cameraId);
         c.clear();
     }
     return c;
@@ -204,50 +182,38 @@ void CameraBase<TCam, TCamTraits>::notifyCallback(int32_t msgType,
 
 template <typename TCam, typename TCamTraits>
 int CameraBase<TCam, TCamTraits>::getNumberOfCameras() {
-    const sp<::android::hardware::ICameraService> cs = getCameraService();
+    const sp<ICameraService> cs = getCameraService();
 
     if (!cs.get()) {
         // as required by the public Java APIs
         return 0;
     }
-    int32_t count;
-    binder::Status res = cs->getNumberOfCameras(
-            ::android::hardware::ICameraService::CAMERA_TYPE_BACKWARD_COMPATIBLE,
-            &count);
-    if (!res.isOk()) {
-        ALOGE("Error reading number of cameras: %s",
-                res.toString8().string());
-        count = 0;
-    }
-    return count;
+    return cs->getNumberOfCameras();
 }
 
 // this can be in BaseCamera but it should be an instance method
 template <typename TCam, typename TCamTraits>
 status_t CameraBase<TCam, TCamTraits>::getCameraInfo(int cameraId,
-        struct hardware::CameraInfo* cameraInfo) {
-    const sp<::android::hardware::ICameraService>& cs = getCameraService();
+                               struct CameraInfo* cameraInfo) {
+    const sp<ICameraService>& cs = getCameraService();
     if (cs == 0) return UNKNOWN_ERROR;
-    binder::Status res = cs->getCameraInfo(cameraId, cameraInfo);
-    return res.isOk() ? OK : res.serviceSpecificErrorCode();
+    return cs->getCameraInfo(cameraId, cameraInfo);
 }
 
 template <typename TCam, typename TCamTraits>
 status_t CameraBase<TCam, TCamTraits>::addServiceListener(
-        const sp<::android::hardware::ICameraServiceListener>& listener) {
-    const sp<::android::hardware::ICameraService>& cs = getCameraService();
+                            const sp<ICameraServiceListener>& listener) {
+    const sp<ICameraService>& cs = getCameraService();
     if (cs == 0) return UNKNOWN_ERROR;
-    binder::Status res = cs->addListener(listener);
-    return res.isOk() ? OK : res.serviceSpecificErrorCode();
+    return cs->addListener(listener);
 }
 
 template <typename TCam, typename TCamTraits>
 status_t CameraBase<TCam, TCamTraits>::removeServiceListener(
-        const sp<::android::hardware::ICameraServiceListener>& listener) {
-    const sp<::android::hardware::ICameraService>& cs = getCameraService();
+                            const sp<ICameraServiceListener>& listener) {
+    const sp<ICameraService>& cs = getCameraService();
     if (cs == 0) return UNKNOWN_ERROR;
-    binder::Status res = cs->removeListener(listener);
-    return res.isOk() ? OK : res.serviceSpecificErrorCode();
+    return cs->removeListener(listener);
 }
 
 template class CameraBase<Camera>;
