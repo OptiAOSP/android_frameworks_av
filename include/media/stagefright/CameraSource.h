@@ -26,7 +26,6 @@
 #include <utils/List.h>
 #include <utils/RefBase.h>
 #include <utils/String16.h>
-#include <MetadataBufferType.h>
 
 namespace android {
 
@@ -61,8 +60,6 @@ public:
      *          permissions checking.
      * @param clientUid the UID of the camera-using application if camera is
      *          NULL; otherwise ignored. Used for permissions checking.
-     * @param clientPid the PID of the camera-using application if camera is
-     *          NULL; otherwise ignored. Used for permissions checking.
      * @param videoSize the dimension (in pixels) of the video frame
      * @param frameRate the target frames per second
      * @param surface the preview surface for display where preview
@@ -83,7 +80,6 @@ public:
                                           int32_t cameraId,
                                           const String16& clientName,
                                           uid_t clientUid,
-                                          pid_t clientPid,
                                           Size videoSize,
                                           int32_t frameRate,
                                           const sp<IGraphicBufferProducer>& surface,
@@ -95,6 +91,8 @@ public:
     virtual status_t stop() { return reset(); }
     virtual status_t read(
             MediaBuffer **buffer, const ReadOptions *options = NULL);
+
+    virtual status_t pause();
 
     /**
      * Check whether a CameraSource object is properly initialized.
@@ -117,11 +115,11 @@ public:
      * Tell whether this camera source stores meta data or real YUV
      * frame data in video buffers.
      *
-     * @return a valid type if meta data is stored in the video
-     *      buffers; kMetadataBufferTypeInvalid if real YUV data is stored in
+     * @return true if meta data is stored in the video
+     *      buffers; false if real YUV data is stored in
      *      the video buffers.
      */
-    MetadataBufferType metaDataStoredInVideoBuffers() const;
+    bool isMetaDataStoredInVideoBuffers() const;
 
     virtual void signalBufferReturned(MediaBuffer* buffer);
 
@@ -131,8 +129,6 @@ protected:
         ProxyListener(const sp<CameraSource>& source);
         virtual void dataCallbackTimestamp(int64_t timestampUs, int32_t msgType,
                 const sp<IMemory> &data);
-        virtual void recordingFrameHandleCallbackTimestamp(int64_t timestampUs,
-                native_handle_t* handle);
 
     private:
         sp<CameraSource> mSource;
@@ -175,14 +171,13 @@ protected:
     int64_t mTimeBetweenFrameCaptureUs;
 
     CameraSource(const sp<ICamera>& camera, const sp<ICameraRecordingProxy>& proxy,
-                 int32_t cameraId, const String16& clientName, uid_t clientUid, pid_t clientPid,
+                 int32_t cameraId, const String16& clientName, uid_t clientUid,
                  Size videoSize, int32_t frameRate,
                  const sp<IGraphicBufferProducer>& surface,
                  bool storeMetaDataInVideoBuffers);
 
     virtual status_t startCameraRecording();
     virtual void releaseRecordingFrame(const sp<IMemory>& frame);
-    virtual void releaseRecordingFrameHandle(native_handle_t* handle);
 
     // Returns true if need to skip the current frame.
     // Called from dataCallbackTimestamp.
@@ -194,15 +189,9 @@ protected:
     virtual void dataCallbackTimestamp(int64_t timestampUs, int32_t msgType,
             const sp<IMemory> &data);
 
-    virtual void recordingFrameHandleCallbackTimestamp(int64_t timestampUs,
-            native_handle_t* handle);
-
-    // Process a buffer item received in BufferQueueListener.
-    virtual void processBufferQueueFrame(BufferItem& buffer);
-
     void releaseCamera();
 
-private:
+protected:
     friend struct CameraSourceListener;
 
     Mutex mLock;
@@ -217,28 +206,31 @@ private:
     int32_t mNumGlitches;
     int64_t mGlitchDurationThresholdUs;
     bool mCollectStats;
-    static const uint32_t kDefaultVideoBufferCount = 32;
     bool mIsMetaDataStoredInVideoBuffers;
+
+    int64_t  mPauseAdjTimeUs;
+    int64_t  mPauseStartTimeUs;
+    int64_t  mPauseEndTimeUs;
+    bool mRecPause;
 
     void releaseQueuedFrames();
     void releaseOneRecordingFrame(const sp<IMemory>& frame);
 
 
     status_t init(const sp<ICamera>& camera, const sp<ICameraRecordingProxy>& proxy,
-                  int32_t cameraId, const String16& clientName, uid_t clientUid, pid_t clientPid,
+                  int32_t cameraId, const String16& clientName, uid_t clientUid,
                   Size videoSize, int32_t frameRate, bool storeMetaDataInVideoBuffers);
 
     status_t initWithCameraAccess(
                   const sp<ICamera>& camera, const sp<ICameraRecordingProxy>& proxy,
-                  int32_t cameraId, const String16& clientName, uid_t clientUid, pid_t clientPid,
+                  int32_t cameraId, const String16& clientName, uid_t clientUid,
                   Size videoSize, int32_t frameRate, bool storeMetaDataInVideoBuffers);
 
     status_t isCameraAvailable(const sp<ICamera>& camera,
                                const sp<ICameraRecordingProxy>& proxy,
                                int32_t cameraId,
                                const String16& clientName,
-                               uid_t clientUid,
-                               pid_t clientPid);
+                               uid_t clientUid);
 
     status_t isCameraColorFormatSupported(const CameraParameters& params);
     status_t configureCamera(CameraParameters* params,
@@ -250,6 +242,9 @@ private:
 
     status_t checkFrameRate(const CameraParameters& params,
                     int32_t frameRate);
+
+    static void adjustIncomingANWBuffer(IMemory* data);
+    static void adjustOutgoingANWBuffer(IMemory* data);
 
     void stopCameraRecording();
     status_t reset();

@@ -59,35 +59,33 @@ MediaExtractor* AVFactory::createExtendedExtractor(
 }
 
 CameraSource* AVFactory::CreateCameraSourceFromCamera(
-            const sp<hardware::ICamera> &camera,
+            const sp<ICamera> &camera,
             const sp<ICameraRecordingProxy> &proxy,
             int32_t cameraId,
             const String16& clientName,
             uid_t clientUid,
-            pid_t clientPid,
             Size videoSize,
             int32_t frameRate,
             const sp<IGraphicBufferProducer>& surface,
             bool storeMetaDataInVideoBuffers) {
     return CameraSource::CreateFromCamera(camera, proxy, cameraId,
-            clientName, clientUid, clientPid, videoSize, frameRate, surface,
+            clientName, clientUid, videoSize, frameRate, surface,
             storeMetaDataInVideoBuffers);
 }
 
 CameraSourceTimeLapse* AVFactory::CreateCameraSourceTimeLapseFromCamera(
-        const sp<hardware::ICamera> &camera,
+        const sp<ICamera> &camera,
         const sp<ICameraRecordingProxy> &proxy,
         int32_t cameraId,
         const String16& clientName,
         uid_t clientUid,
-        pid_t clientPid,
         Size videoSize,
         int32_t videoFrameRate,
         const sp<IGraphicBufferProducer>& surface,
         int64_t timeBetweenFrameCaptureUs,
         bool storeMetaDataInVideoBuffers) {
     return CameraSourceTimeLapse::CreateFromCamera(camera, proxy, cameraId,
-            clientName, clientUid, clientPid, videoSize, videoFrameRate, surface,
+            clientName, clientUid, videoSize, videoFrameRate, surface,
             timeBetweenFrameCaptureUs, storeMetaDataInVideoBuffers);
 }
 

@@ -64,24 +64,22 @@ struct AVFactory {
     virtual ElementaryStreamQueue* createESQueue(
             ElementaryStreamQueue::Mode mode, uint32_t flags = 0);
     virtual CameraSource *CreateCameraSourceFromCamera(
-            const sp<hardware::ICamera> &camera,
+            const sp<ICamera> &camera,
             const sp<ICameraRecordingProxy> &proxy,
             int32_t cameraId,
             const String16& clientName,
             uid_t clientUid,
-            pid_t clientPid,
             Size videoSize,
             int32_t frameRate,
             const sp<IGraphicBufferProducer>& surface,
             bool storeMetaDataInVideoBuffers = true);
 
     virtual CameraSourceTimeLapse *CreateCameraSourceTimeLapseFromCamera(
-            const sp<hardware::ICamera> &camera,
+            const sp<ICamera> &camera,
             const sp<ICameraRecordingProxy> &proxy,
             int32_t cameraId,
             const String16& clientName,
             uid_t clientUid,
-            pid_t clientPid,
             Size videoSize,
             int32_t videoFrameRate,
             const sp<IGraphicBufferProducer>& surface,
@@ -157,7 +155,7 @@ struct AVUtils {
     }
 
     virtual bool isAudioMuxFormatSupported(const char *mime);
-    virtual void cacheCaptureBuffers(sp<hardware::ICamera> camera, video_encoder encoder);
+    virtual void cacheCaptureBuffers(sp<ICamera> camera, video_encoder encoder);
     virtual const char *getCustomCodecsLocation();
     virtual const char *getCustomCodecsPerformanceLocation();
 

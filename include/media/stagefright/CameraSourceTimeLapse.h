@@ -39,7 +39,6 @@ public:
         int32_t cameraId,
         const String16& clientName,
         uid_t clientUid,
-        pid_t clientPid,
         Size videoSize,
         int32_t videoFrameRate,
         const sp<IGraphicBufferProducer>& surface,
@@ -68,6 +67,9 @@ protected:
 
     // Real timestamp of the last encoded time lapse frame
     int64_t mLastTimeLapseFrameRealTimestampUs;
+    // Adjusted continuous timestamp based on recording fps
+    // of the last encoded time lapse frame
+    int64_t mLastTimeLapseFrameTimeStampUs;
 
     // Variable set in dataCallbackTimestamp() to help skipCurrentFrame()
     // to know if current frame needs to be skipped.
@@ -116,7 +118,6 @@ protected:
         int32_t cameraId,
         const String16& clientName,
         uid_t clientUid,
-        pid_t clientPid,
         Size videoSize,
         int32_t videoFrameRate,
         const sp<IGraphicBufferProducer>& surface,
@@ -138,22 +139,8 @@ protected:
     // In the video camera case calls skipFrameAndModifyTimeStamp() to modify
     // timestamp and set mSkipCurrentFrame.
     // Then it calls the base CameraSource::dataCallbackTimestamp()
-    // This will be called in VIDEO_BUFFER_MODE_DATA_CALLBACK_YUV and
-    // VIDEO_BUFFER_MODE_DATA_CALLBACK_METADATA mode.
     virtual void dataCallbackTimestamp(int64_t timestampUs, int32_t msgType,
             const sp<IMemory> &data);
-
-    // In the video camera case calls skipFrameAndModifyTimeStamp() to modify
-    // timestamp and set mSkipCurrentFrame.
-    // Then it calls the base CameraSource::recordingFrameHandleCallbackTimestamp()
-    // This will be called in VIDEO_BUFFER_MODE_DATA_CALLBACK_METADATA mode when
-    // the metadata is VideoNativeHandleMetadata.
-    virtual void recordingFrameHandleCallbackTimestamp(int64_t timestampUs,
-            native_handle_t* handle);
-
-    // Process a buffer item received in CameraSource::BufferQueueListener.
-    // This will be called in VIDEO_BUFFER_MODE_BUFFER_QUEUE mode.
-    virtual void processBufferQueueFrame(BufferItem& buffer);
 
     // Convenience function to fill mLastReadBufferCopy from the just read
     // buffer.

@@ -1499,13 +1499,13 @@ status_t StagefrightRecorder::setupCameraSource(
         }
 
         mCameraSourceTimeLapse = AVFactory::get()->CreateCameraSourceTimeLapseFromCamera(
-                mCamera, mCameraProxy, mCameraId, mClientName, mClientUid, mClientPid,
+                mCamera, mCameraProxy, mCameraId, mClientName, mClientUid,
                 videoSize, mFrameRate, mPreviewSurface,
                 mTimeBetweenCaptureUs);
         *cameraSource = mCameraSourceTimeLapse;
     } else {
         *cameraSource = AVFactory::get()->CreateCameraSourceFromCamera(
-                mCamera, mCameraProxy, mCameraId, mClientName, mClientUid, mClientPid,
+                mCamera, mCameraProxy, mCameraId, mClientName, mClientUid,
                 videoSize, mFrameRate,
                 mPreviewSurface);
     }
@@ -1535,8 +1535,8 @@ status_t StagefrightRecorder::setupCameraSource(
 
     CHECK(mFrameRate != -1);
 
-    mMetaDataStoredInVideoBuffers =
-        (*cameraSource)->metaDataStoredInVideoBuffers();
+     mIsMetaDataStoredInVideoBuffers =
+         (*cameraSource)->isMetaDataStoredInVideoBuffers();
 
     return OK;
 }
@@ -1663,11 +1663,11 @@ status_t StagefrightRecorder::setupVideoEncoder(
         format->setInt32("android._prefer-b-frames", preferBFrames);
     }
 
-    if (mMetaDataStoredInVideoBuffers != kMetadataBufferTypeInvalid) {
-        format->setInt32("android._input-metadata-buffer-type", mMetaDataStoredInVideoBuffers);
+    uint32_t flags = 0;
+    if (mIsMetaDataStoredInVideoBuffers) {
+        flags |= MediaCodecSource::FLAG_USE_METADATA_INPUT;
     }
 
-    uint32_t flags = 0;
     if (cameraSource == NULL) {
         flags |= MediaCodecSource::FLAG_USE_SURFACE_INPUT;
     } else {
@@ -1986,7 +1986,7 @@ status_t StagefrightRecorder::reset() {
     mCaptureFps = 0.0f;
     mTimeBetweenCaptureUs = -1;
     mCameraSourceTimeLapse = NULL;
-    mMetaDataStoredInVideoBuffers = kMetadataBufferTypeInvalid;
+    mIsMetaDataStoredInVideoBuffers = false;
     mEncoderProfiles = MediaProfiles::getInstance();
     mRotationDegrees = 0;
     mLatitudex10000 = -3600000;

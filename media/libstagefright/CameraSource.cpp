@@ -27,8 +27,10 @@
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/MediaErrors.h>
 #include <media/stagefright/MetaData.h>
+#include <media/hardware/HardwareAPI.h>
 #include <camera/Camera.h>
 #include <camera/CameraParameters.h>
+#include <camera/ICameraRecordingProxy.h>
 #include <gui/Surface.h>
 #include <utils/String8.h>
 #include <cutils/properties.h>
@@ -54,8 +56,6 @@ struct CameraSourceListener : public CameraListener {
 
     virtual void postDataTimestamp(
             nsecs_t timestamp, int32_t msgType, const sp<IMemory>& dataPtr);
-
-    virtual void postRecordingFrameHandleTimestamp(nsecs_t timestamp, native_handle_t* handle);
 
 protected:
     virtual ~CameraSourceListener();
@@ -98,14 +98,6 @@ void CameraSourceListener::postDataTimestamp(
     sp<CameraSource> source = mSource.promote();
     if (source.get() != NULL) {
         source->dataCallbackTimestamp(timestamp/1000, msgType, dataPtr);
-    }
-}
-
-void CameraSourceListener::postRecordingFrameHandleTimestamp(nsecs_t timestamp,
-        native_handle_t* handle) {
-    sp<CameraSource> source = mSource.promote();
-    if (source.get() != nullptr) {
-        source->recordingFrameHandleCallbackTimestamp(timestamp/1000, handle);
     }
 }
 
@@ -178,8 +170,8 @@ CameraSource *CameraSource::Create(const String16 &clientName) {
     size.height = -1;
 
     sp<ICamera> camera;
-    return new CameraSource(camera, NULL, 0, clientName, Camera::USE_CALLING_UID,
-            Camera::USE_CALLING_PID, size, -1, NULL, false);
+    return new CameraSource(camera, NULL, 0, clientName, -1,
+            size, -1, NULL, false);
 }
 
 // static
@@ -189,14 +181,13 @@ CameraSource *CameraSource::CreateFromCamera(
     int32_t cameraId,
     const String16& clientName,
     uid_t clientUid,
-    pid_t clientPid,
     Size videoSize,
     int32_t frameRate,
     const sp<IGraphicBufferProducer>& surface,
     bool storeMetaDataInVideoBuffers) {
 
     CameraSource *source = new CameraSource(camera, proxy, cameraId,
-            clientName, clientUid, clientPid, videoSize, frameRate, surface,
+            clientName, clientUid, videoSize, frameRate, surface,
             storeMetaDataInVideoBuffers);
     return source;
 }
@@ -207,7 +198,6 @@ CameraSource::CameraSource(
     int32_t cameraId,
     const String16& clientName,
     uid_t clientUid,
-    pid_t clientPid,
     Size videoSize,
     int32_t frameRate,
     const sp<IGraphicBufferProducer>& surface,
@@ -226,12 +216,16 @@ CameraSource::CameraSource(
       mNumFramesDropped(0),
       mNumGlitches(0),
       mGlitchDurationThresholdUs(200000),
-      mCollectStats(false) {
+      mCollectStats(false),
+      mPauseAdjTimeUs(0),
+      mPauseStartTimeUs(0),
+      mPauseEndTimeUs(0),
+      mRecPause(false) {
     mVideoSize.width  = -1;
     mVideoSize.height = -1;
 
     mInitCheck = init(camera, proxy, cameraId,
-                    clientName, clientUid, clientPid,
+                    clientName, clientUid,
                     videoSize, frameRate,
                     storeMetaDataInVideoBuffers);
     if (mInitCheck != OK) releaseCamera();
@@ -243,10 +237,10 @@ status_t CameraSource::initCheck() const {
 
 status_t CameraSource::isCameraAvailable(
     const sp<ICamera>& camera, const sp<ICameraRecordingProxy>& proxy,
-    int32_t cameraId, const String16& clientName, uid_t clientUid, pid_t clientPid) {
+    int32_t cameraId, const String16& clientName, uid_t clientUid) {
 
     if (camera == 0) {
-        mCamera = Camera::connect(cameraId, clientName, clientUid, clientPid);
+        mCamera = Camera::connect(cameraId, clientName, clientUid);
         if (mCamera == 0) return -EBUSY;
         mCameraFlags &= ~FLAGS_HOT_CAMERA;
     } else {
@@ -386,7 +380,7 @@ status_t CameraSource::configureCamera(
     }
 
     if (frameRate != -1) {
-        CHECK(frameRate > 0 && frameRate <= 240);
+        CHECK(frameRate > 0 && frameRate <= 120);
         const char* supportedFrameRates =
                 params->get(CameraParameters::KEY_SUPPORTED_PREVIEW_FRAME_RATES);
         CHECK(supportedFrameRates != NULL);
@@ -530,7 +524,6 @@ status_t CameraSource::init(
         int32_t cameraId,
         const String16& clientName,
         uid_t clientUid,
-        pid_t clientPid,
         Size videoSize,
         int32_t frameRate,
         bool storeMetaDataInVideoBuffers) {
@@ -538,7 +531,7 @@ status_t CameraSource::init(
     ALOGV("init");
     status_t err = OK;
     int64_t token = IPCThreadState::self()->clearCallingIdentity();
-    err = initWithCameraAccess(camera, proxy, cameraId, clientName, clientUid, clientPid,
+    err = initWithCameraAccess(camera, proxy, cameraId, clientName, clientUid,
                                videoSize, frameRate,
                                storeMetaDataInVideoBuffers);
     IPCThreadState::self()->restoreCallingIdentity(token);
@@ -551,7 +544,6 @@ status_t CameraSource::initWithCameraAccess(
         int32_t cameraId,
         const String16& clientName,
         uid_t clientUid,
-        pid_t clientPid,
         Size videoSize,
         int32_t frameRate,
         bool storeMetaDataInVideoBuffers) {
@@ -559,7 +551,7 @@ status_t CameraSource::initWithCameraAccess(
     status_t err = OK;
 
     if ((err = isCameraAvailable(camera, proxy, cameraId,
-            clientName, clientUid, clientPid)) != OK) {
+            clientName, clientUid)) != OK) {
         ALOGE("Camera connection could not be established.");
         return err;
     }
@@ -615,7 +607,6 @@ status_t CameraSource::initWithCameraAccess(
     int sliceHeight = newCameraParams.getInt(CameraParameters::KEY_RECORD_SLICE_HEIGHT);
 #endif
     mMeta = new MetaData;
-
     mMeta->setCString(kKeyMIMEType,  MEDIA_MIMETYPE_VIDEO_RAW);
     mMeta->setInt32(kKeyColorFormat, mColorFormat);
     mMeta->setInt32(kKeyWidth,       mVideoSize.width);
@@ -661,9 +652,6 @@ status_t CameraSource::startCameraRecording() {
             ALOGW("Failed to set video buffer count to %d due to %d",
                 mNumInputBuffers, err);
         }
-
-        // Create memory heap to store buffers as VideoNativeMetadata.
-        createVideoBufferMemoryHeap(sizeof(VideoNativeHandleMetadata), kDefaultVideoBufferCount);
     }
 
     err = mCamera->sendCommand(
@@ -699,6 +687,14 @@ status_t CameraSource::startCameraRecording() {
 
 status_t CameraSource::start(MetaData *meta) {
     ALOGV("start");
+    if(mRecPause) {
+        mRecPause = false;
+        mPauseAdjTimeUs = mPauseEndTimeUs - mPauseStartTimeUs;
+        ALOGV("resume : mPause Adj / End / Start : %" PRId64 " / %" PRId64 " / %" PRId64" us",
+            mPauseAdjTimeUs, mPauseEndTimeUs, mPauseStartTimeUs);
+        return OK;
+    }
+
     CHECK(!mStarted);
     if (mInitCheck != OK) {
         ALOGE("CameraSource is not initialized yet");
@@ -712,13 +708,23 @@ status_t CameraSource::start(MetaData *meta) {
     }
 
     mStartTimeUs = 0;
+    mRecPause = false;
+    mPauseAdjTimeUs = 0;
+    mPauseStartTimeUs = 0;
+    mPauseEndTimeUs = 0;
     mNumInputBuffers = 0;
     mEncoderFormat = HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED;
-    mEncoderDataSpace = HAL_DATASPACE_V0_BT709;
+    mEncoderDataSpace = HAL_DATASPACE_BT709;
 
     if (meta) {
         int64_t startTimeUs;
-        if (meta->findInt64(kKeyTime, &startTimeUs)) {
+
+        auto key = kKeyTime;
+        if (!property_get_bool("media.camera.ts.monotonic", true)) {
+            key = kKeyTimeBoot;
+        }
+
+        if (meta->findInt64(key, &startTimeUs)) {
             mStartTimeUs = startTimeUs;
         }
 
@@ -730,10 +736,10 @@ status_t CameraSource::start(MetaData *meta) {
 
         // apply encoder color format if specified
         if (meta->findInt32(kKeyPixelFormat, &mEncoderFormat)) {
-            ALOGI("Using encoder format: %#x", mEncoderFormat);
+            ALOGV("Using encoder format: %#x", mEncoderFormat);
         }
         if (meta->findInt32(kKeyColorSpace, &mEncoderDataSpace)) {
-            ALOGI("Using encoder data space: %#x", mEncoderDataSpace);
+            ALOGV("Using encoder data space: %#x", mEncoderDataSpace);
         }
     }
 
@@ -745,17 +751,23 @@ status_t CameraSource::start(MetaData *meta) {
     return err;
 }
 
+status_t CameraSource::pause() {
+    mRecPause = true;
+    mPauseStartTimeUs = mLastFrameTimestampUs;
+    //record the end time too, or there is a risk the end time is 0
+    mPauseEndTimeUs = mLastFrameTimestampUs;
+    ALOGV("pause : mPauseStart %" PRId64 " us, #Queued Frames : %zd",
+        mPauseStartTimeUs, mFramesReceived.size());
+    return OK;
+}
+
 void CameraSource::stopCameraRecording() {
     ALOGV("stopCameraRecording");
     if (mCameraFlags & FLAGS_HOT_CAMERA) {
-        if (mCameraRecordingProxy != 0) {
-            mCameraRecordingProxy->stopRecording();
-        }
+        mCameraRecordingProxy->stopRecording();
     } else {
-        if (mCamera != 0) {
-            mCamera->setListener(NULL);
-            mCamera->stopRecording();
-        }
+        mCamera->setListener(NULL);
+        mCamera->stopRecording();
     }
 }
 
@@ -854,6 +866,8 @@ void CameraSource::releaseQueuedFrames() {
     List<sp<IMemory> >::iterator it;
     while (!mFramesReceived.empty()) {
         it = mFramesReceived.begin();
+        // b/28466701
+        adjustOutgoingANWBuffer(it->get());
         releaseRecordingFrame(*it);
         mFramesReceived.erase(it);
         ++mNumFramesDropped;
@@ -874,6 +888,9 @@ void CameraSource::signalBufferReturned(MediaBuffer *buffer) {
     for (List<sp<IMemory> >::iterator it = mFramesBeingEncoded.begin();
          it != mFramesBeingEncoded.end(); ++it) {
         if ((*it)->pointer() ==  buffer->data()) {
+            // b/28466701
+            adjustOutgoingANWBuffer(it->get());
+
             releaseOneRecordingFrame((*it));
             mFramesBeingEncoded.erase(it);
             ++mNumFramesEncoded;
@@ -950,10 +967,23 @@ void CameraSource::dataCallbackTimestamp(int64_t timestampUs,
         return;
     }
 
+    if (mRecPause == true) {
+        if(!mFramesReceived.empty()) {
+            ALOGV("releaseQueuedFrames - #Queued Frames : %zd", mFramesReceived.size());
+            releaseQueuedFrames();
+        }
+        ALOGV("release One Video Frame for Pause : %" PRId64 "us", timestampUs);
+        releaseOneRecordingFrame(data);
+        mPauseEndTimeUs = timestampUs;
+        return;
+    }
+    timestampUs -= mPauseAdjTimeUs;
+    ALOGV("dataCallbackTimestamp: AdjTimestamp %" PRId64 "us", timestampUs);
+
     if (mNumFramesReceived > 0) {
         if (timestampUs <= mLastFrameTimestampUs) {
-            ALOGW("Dropping frame with backward timestamp %lld (last %lld)",
-                    (long long)timestampUs, (long long)mLastFrameTimestampUs);
+            ALOGW("Dropping frame with backward timestamp %" PRId64 " (last %" PRId64 ")",
+                    timestampUs, mLastFrameTimestampUs);
             releaseOneRecordingFrame(data);
             return;
         }
@@ -979,6 +1009,10 @@ void CameraSource::dataCallbackTimestamp(int64_t timestampUs,
     ++mNumFramesReceived;
 
     CHECK(data != NULL && data->size() > 0);
+
+    // b/28466701
+    adjustIncomingANWBuffer(data.get());
+
     mFramesReceived.push_back(data);
     int64_t timeUs = mStartTimeUs + (timestampUs - mFirstFrameTimeUs);
     mFrameTimes.push_back(timeUs);
@@ -992,6 +1026,24 @@ bool CameraSource::isMetaDataStoredInVideoBuffers() const {
     return mIsMetaDataStoredInVideoBuffers;
 }
 
+void CameraSource::adjustIncomingANWBuffer(IMemory* data) {
+    VideoNativeMetadata *payload =
+            reinterpret_cast<VideoNativeMetadata*>(data->pointer());
+    if (payload->eType == kMetadataBufferTypeANWBuffer) {
+        payload->pBuffer = (ANativeWindowBuffer*)(((uint8_t*)payload->pBuffer) +
+                ICameraRecordingProxy::getCommonBaseAddress());
+    }
+}
+
+void CameraSource::adjustOutgoingANWBuffer(IMemory* data) {
+    VideoNativeMetadata *payload =
+            reinterpret_cast<VideoNativeMetadata*>(data->pointer());
+    if (payload->eType == kMetadataBufferTypeANWBuffer) {
+        payload->pBuffer = (ANativeWindowBuffer*)(((uint8_t*)payload->pBuffer) -
+                ICameraRecordingProxy::getCommonBaseAddress());
+    }
+}
+
 CameraSource::ProxyListener::ProxyListener(const sp<CameraSource>& source) {
     mSource = source;
 }
@@ -999,11 +1051,6 @@ CameraSource::ProxyListener::ProxyListener(const sp<CameraSource>& source) {
 void CameraSource::ProxyListener::dataCallbackTimestamp(
         nsecs_t timestamp, int32_t msgType, const sp<IMemory>& dataPtr) {
     mSource->dataCallbackTimestamp(timestamp / 1000, msgType, dataPtr);
-}
-
-void CameraSource::ProxyListener::recordingFrameHandleCallbackTimestamp(nsecs_t timestamp,
-        native_handle_t* handle) {
-    mSource->recordingFrameHandleCallbackTimestamp(timestamp / 1000, handle);
 }
 
 void CameraSource::DeathNotifier::binderDied(const wp<IBinder>& who __unused) {

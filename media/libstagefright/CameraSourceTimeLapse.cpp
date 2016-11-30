@@ -40,7 +40,6 @@ CameraSourceTimeLapse *CameraSourceTimeLapse::CreateFromCamera(
         int32_t cameraId,
         const String16& clientName,
         uid_t clientUid,
-        pid_t clientPid,
         Size videoSize,
         int32_t videoFrameRate,
         const sp<IGraphicBufferProducer>& surface,
@@ -49,7 +48,7 @@ CameraSourceTimeLapse *CameraSourceTimeLapse::CreateFromCamera(
 
     CameraSourceTimeLapse *source = new
             CameraSourceTimeLapse(camera, proxy, cameraId,
-                clientName, clientUid, clientPid,
+                clientName, clientUid,
                 videoSize, videoFrameRate, surface,
                 timeBetweenFrameCaptureUs,
                 storeMetaDataInVideoBuffers);
@@ -69,17 +68,17 @@ CameraSourceTimeLapse::CameraSourceTimeLapse(
         int32_t cameraId,
         const String16& clientName,
         uid_t clientUid,
-        pid_t clientPid,
         Size videoSize,
         int32_t videoFrameRate,
         const sp<IGraphicBufferProducer>& surface,
         int64_t timeBetweenFrameCaptureUs,
         bool storeMetaDataInVideoBuffers)
-      : CameraSource(camera, proxy, cameraId, clientName, clientUid, clientPid,
+      : CameraSource(camera, proxy, cameraId, clientName, clientUid,
                 videoSize, videoFrameRate, surface,
                 storeMetaDataInVideoBuffers),
       mTimeBetweenTimeLapseVideoFramesUs(1E6/videoFrameRate),
       mLastTimeLapseFrameRealTimestampUs(0),
+      mLastTimeLapseFrameTimeStampUs(0),
       mSkipCurrentFrame(false) {
 
     mTimeBetweenFrameCaptureUs = timeBetweenFrameCaptureUs;
@@ -254,6 +253,7 @@ bool CameraSourceTimeLapse::skipFrameAndModifyTimeStamp(int64_t *timestampUs) {
         ALOGV("dataCallbackTimestamp timelapse: initial frame");
 
         mLastTimeLapseFrameRealTimestampUs = *timestampUs;
+        mLastTimeLapseFrameTimeStampUs = *timestampUs;
         return false;
     }
 
@@ -265,8 +265,10 @@ bool CameraSourceTimeLapse::skipFrameAndModifyTimeStamp(int64_t *timestampUs) {
         if (mForceRead) {
             ALOGV("dataCallbackTimestamp timelapse: forced read");
             mForceRead = false;
+            mLastTimeLapseFrameRealTimestampUs = *timestampUs;
             *timestampUs =
-                mLastFrameTimestampUs + mTimeBetweenTimeLapseVideoFramesUs;
+                mLastTimeLapseFrameTimeStampUs + mTimeBetweenTimeLapseVideoFramesUs;
+            mLastTimeLapseFrameTimeStampUs = *timestampUs;
 
             // Really make sure that this video recording frame will not be dropped.
             if (*timestampUs < mStartTimeUs) {
@@ -281,7 +283,8 @@ bool CameraSourceTimeLapse::skipFrameAndModifyTimeStamp(int64_t *timestampUs) {
     // The first 2 output frames from the encoder are: decoder specific info and
     // the compressed video frame data for the first input video frame.
     if (mNumFramesEncoded >= 1 && *timestampUs <
-        (mLastTimeLapseFrameRealTimestampUs + mTimeBetweenFrameCaptureUs)) {
+        (mLastTimeLapseFrameRealTimestampUs + mTimeBetweenFrameCaptureUs) &&
+        (mTimeBetweenFrameCaptureUs > mTimeBetweenTimeLapseVideoFramesUs + 1)) {
         // Skip all frames from last encoded frame until
         // sufficient time (mTimeBetweenFrameCaptureUs) has passed.
         // Tell the camera to release its recording frame and return.
@@ -295,7 +298,8 @@ bool CameraSourceTimeLapse::skipFrameAndModifyTimeStamp(int64_t *timestampUs) {
         ALOGV("dataCallbackTimestamp timelapse: got timelapse frame");
 
         mLastTimeLapseFrameRealTimestampUs = *timestampUs;
-        *timestampUs = mLastFrameTimestampUs + mTimeBetweenTimeLapseVideoFramesUs;
+        *timestampUs = mLastTimeLapseFrameTimeStampUs + mTimeBetweenTimeLapseVideoFramesUs;
+        mLastTimeLapseFrameTimeStampUs = *timestampUs;
         // Update start-time once the captured-time reaches the expected start-time.
         // Not doing so will result in CameraSource always dropping frames since
         // updated-timestamp will never intersect start-timestamp
@@ -312,21 +316,6 @@ void CameraSourceTimeLapse::dataCallbackTimestamp(int64_t timestampUs, int32_t m
     ALOGV("dataCallbackTimestamp");
     mSkipCurrentFrame = skipFrameAndModifyTimeStamp(&timestampUs);
     CameraSource::dataCallbackTimestamp(timestampUs, msgType, data);
-}
-
-void CameraSourceTimeLapse::recordingFrameHandleCallbackTimestamp(int64_t timestampUs,
-            native_handle_t* handle) {
-    ALOGV("recordingFrameHandleCallbackTimestamp");
-    mSkipCurrentFrame = skipFrameAndModifyTimeStamp(&timestampUs);
-    CameraSource::recordingFrameHandleCallbackTimestamp(timestampUs, handle);
-}
-
-void CameraSourceTimeLapse::processBufferQueueFrame(BufferItem& buffer) {
-    ALOGV("processBufferQueueFrame");
-    int64_t timestampUs = buffer.mTimestamp / 1000;
-    mSkipCurrentFrame = skipFrameAndModifyTimeStamp(&timestampUs);
-    buffer.mTimestamp = timestampUs * 1000;
-    CameraSource::processBufferQueueFrame(buffer);
 }
 
 }  // namespace android
