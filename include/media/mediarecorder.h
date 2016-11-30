@@ -29,14 +29,11 @@ namespace android {
 
 class Surface;
 class IMediaRecorder;
+class ICamera;
 class ICameraRecordingProxy;
 class IGraphicBufferProducer;
 struct PersistentSurface;
 class Surface;
-
-namespace hardware {
-class ICamera;
-}
 
 typedef void (*media_completion_f)(status_t status, void *cookie);
 
@@ -222,8 +219,7 @@ public:
 
     void        died();
     status_t    initCheck();
-    status_t    setCamera(const sp<hardware::ICamera>& camera,
-            const sp<ICameraRecordingProxy>& proxy);
+    status_t    setCamera(const sp<ICamera>& camera, const sp<ICameraRecordingProxy>& proxy);
     status_t    setPreviewSurface(const sp<IGraphicBufferProducer>& surface);
     status_t    setVideoSource(int vs);
     status_t    setAudioSource(int as);

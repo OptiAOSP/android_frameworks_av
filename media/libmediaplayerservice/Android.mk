@@ -52,7 +52,6 @@ LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/frameworks/av/media/libstagefright/wifi-display          \
     $(TOP)/frameworks/av/media/libstagefright/webm                  \
     $(TOP)/frameworks/av/include/media                              \
-    $(TOP)/frameworks/av/include/camera                             \
     $(TOP)/frameworks/native/include/media/openmax                  \
     $(TOP)/external/tremolo/Tremolo                                 \
     libcore/include                                                 \

@@ -20,8 +20,7 @@
 
 #include <media/stagefright/MediaBuffer.h>
 #include <media/stagefright/MediaSource.h>
-#include <camera/android/hardware/ICamera.h>
-#include <camera/ICameraRecordingProxy.h>
+#include <camera/ICamera.h>
 #include <camera/ICameraRecordingProxyListener.h>
 #include <camera/CameraParameters.h>
 #include <gui/BufferItemConsumer.h>
@@ -82,7 +81,7 @@ public:
      *
      * @return NULL on error.
      */
-    static CameraSource *CreateFromCamera(const sp<hardware::ICamera> &camera,
+    static CameraSource *CreateFromCamera(const sp<ICamera> &camera,
                                           const sp<ICameraRecordingProxy> &proxy,
                                           int32_t cameraId,
                                           const String16& clientName,
@@ -218,7 +217,7 @@ protected:
     // Time between capture of two frames.
     int64_t mTimeBetweenFrameCaptureUs;
 
-    CameraSource(const sp<hardware::ICamera>& camera, const sp<ICameraRecordingProxy>& proxy,
+    CameraSource(const sp<ICamera>& camera, const sp<ICameraRecordingProxy>& proxy,
                  int32_t cameraId, const String16& clientName, uid_t clientUid, pid_t clientPid,
                  Size videoSize, int32_t frameRate,
                  const sp<IGraphicBufferProducer>& surface,
@@ -289,12 +288,12 @@ private:
     void releaseOneRecordingFrame(const sp<IMemory>& frame);
     void createVideoBufferMemoryHeap(size_t size, uint32_t bufferCount);
 
-    status_t init(const sp<hardware::ICamera>& camera, const sp<ICameraRecordingProxy>& proxy,
+    status_t init(const sp<ICamera>& camera, const sp<ICameraRecordingProxy>& proxy,
                   int32_t cameraId, const String16& clientName, uid_t clientUid, pid_t clientPid,
                   Size videoSize, int32_t frameRate, bool storeMetaDataInVideoBuffers);
 
     status_t initWithCameraAccess(
-                  const sp<hardware::ICamera>& camera, const sp<ICameraRecordingProxy>& proxy,
+                  const sp<ICamera>& camera, const sp<ICameraRecordingProxy>& proxy,
                   int32_t cameraId, const String16& clientName, uid_t clientUid, pid_t clientPid,
                   Size videoSize, int32_t frameRate, bool storeMetaDataInVideoBuffers);
 
@@ -302,7 +301,7 @@ private:
     status_t initBufferQueue(uint32_t width, uint32_t height, uint32_t format,
                   android_dataspace dataSpace, uint32_t bufferCount);
 
-    status_t isCameraAvailable(const sp<hardware::ICamera>& camera,
+    status_t isCameraAvailable(const sp<ICamera>& camera,
                                const sp<ICameraRecordingProxy>& proxy,
                                int32_t cameraId,
                                const String16& clientName,
