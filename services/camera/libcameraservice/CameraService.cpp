@@ -1189,6 +1189,7 @@ status_t CameraService::connectLegacy(
 
     ATRACE_CALL();
     String8 id = String8::format("%d", cameraId);
+#if 0
     int apiVersion = mModule->getModuleApiVersion();
     if (halVersion != CAMERA_HAL_API_VERSION_UNSPECIFIED &&
             apiVersion < CAMERA_MODULE_API_VERSION_2_3) {
@@ -1204,6 +1205,7 @@ status_t CameraService::connectLegacy(
                 String8("HAL module version doesn't support legacy HAL connections"));
         return INVALID_OPERATION;
     }
+#endif
 
     status_t ret = NO_ERROR;
     sp<Client> client = nullptr;
