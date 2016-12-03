@@ -30,6 +30,7 @@
 #define LOG_TAG "AVUtils"
 #include <utils/Log.h>
 #include <utils/StrongPointer.h>
+#include <camera/ICamera.h>
 #include <cutils/properties.h>
 
 #include <media/stagefright/foundation/ADebug.h>
@@ -431,7 +432,7 @@ bool AVUtils::isAudioMuxFormatSupported(const char * mime) {
     return false;
 }
 
-void AVUtils::cacheCaptureBuffers(sp<hardware::ICamera> camera, video_encoder encoder) {
+void AVUtils::cacheCaptureBuffers(sp<ICamera> camera, video_encoder encoder) {
     if (camera != NULL) {
         char mDeviceName[PROPERTY_VALUE_MAX];
         property_get("ro.board.platform", mDeviceName, "0");
