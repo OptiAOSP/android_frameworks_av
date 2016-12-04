@@ -2395,28 +2395,41 @@ status_t AudioTrack::getTimestamp(AudioTimestamp& timestamp)
                 // It is possible that the best location has moved from the kernel to the server.
                 // In this case we adjust the position from the previous computed latency.
                 if (location == ExtendedTimestamp::LOCATION_SERVER) {
-                    ALOGW_IF(mPreviousLocation == ExtendedTimestamp::LOCATION_KERNEL,
-                            "getTimestamp() location moved from kernel to server");
-                    // check that the last kernel OK time info exists and the positions
-                    // are valid (if they predate the current track, the positions may
-                    // be zero or negative).
-                    const int64_t frames =
-                            (ets.mTimeNs[ExtendedTimestamp::LOCATION_SERVER_LASTKERNELOK] < 0 ||
-                            ets.mTimeNs[ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK] < 0 ||
-                            ets.mPosition[ExtendedTimestamp::LOCATION_SERVER_LASTKERNELOK] <= 0 ||
-                            ets.mPosition[ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK] <= 0)
-                            ?
-                            int64_t((double)mAfLatency * mSampleRate * mPlaybackRate.mSpeed
-                                    / 1000)
-                            :
-                            (ets.mPosition[ExtendedTimestamp::LOCATION_SERVER_LASTKERNELOK]
-                            - ets.mPosition[ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK]);
-                    ALOGV("frame adjustment:%lld  timestamp:%s",
-                            (long long)frames, ets.toString().c_str());
-                    if (frames >= ets.mPosition[location]) {
-                        timestamp.mPosition = 0;
+                    //Try to use the value from driver only if the delta value between
+                    //server and lastkernelok value more than 2 times latency frames then switch to server
+                    if (((ets.mPosition[location] -
+                        ets.mPosition[ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK]) <=
+                        2*(int64_t((double)mAfLatency * mSampleRate * mPlaybackRate.mSpeed))) &&
+                        (ets.mTimeNs[ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK] > 0)) {
+                        timestamp.mPosition = ets.mPosition[ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK];
+                        timestamp.mTime.tv_sec = ets.mTimeNs[ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK] / 1000000000;
+                        timestamp.mTime.tv_nsec = ets.mTimeNs[ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK] - timestamp.mTime.tv_sec * 1000000000LL;
+                        location = ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK;
                     } else {
-                        timestamp.mPosition = (uint32_t)(ets.mPosition[location] - frames);
+                        ALOGW_IF(mPreviousLocation == ExtendedTimestamp::LOCATION_KERNEL ||
+                                mPreviousLocation == ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK,
+                                "getTimestamp() location moved from kernel to server");
+                        // check that the last kernel OK time info exists and the positions
+                        // are valid (if they predate the current track, the positions may
+                        // be zero or negative).
+                        const int64_t frames =
+                                (ets.mTimeNs[ExtendedTimestamp::LOCATION_SERVER_LASTKERNELOK] < 0 ||
+                                ets.mTimeNs[ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK] < 0 ||
+                                ets.mPosition[ExtendedTimestamp::LOCATION_SERVER_LASTKERNELOK] <= 0 ||
+                                ets.mPosition[ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK] <= 0)
+                                ?
+                                int64_t((double)mAfLatency * mSampleRate * mPlaybackRate.mSpeed
+                                        / 1000)
+                                :
+                                (ets.mPosition[ExtendedTimestamp::LOCATION_SERVER_LASTKERNELOK]
+                                - ets.mPosition[ExtendedTimestamp::LOCATION_KERNEL_LASTKERNELOK]);
+                        ALOGV("frame adjustment:%lld  timestamp:%s",
+                                (long long)frames, ets.toString().c_str());
+                        if (frames >= ets.mPosition[location]) {
+                            timestamp.mPosition = 0;
+                        } else {
+                            timestamp.mPosition = (uint32_t)(ets.mPosition[location] - frames);
+                        }
                     }
                 } else if (location == ExtendedTimestamp::LOCATION_KERNEL) {
                     ALOGV_IF(mPreviousLocation == ExtendedTimestamp::LOCATION_SERVER,
