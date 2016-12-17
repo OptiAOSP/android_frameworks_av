@@ -34,7 +34,6 @@ class Camera;
 class ICameraRecordingProxy;
 class CameraSource;
 class CameraSourceTimeLapse;
-struct MediaCodecSource;
 struct MediaSource;
 struct MediaWriter;
 class MetaData;
@@ -68,7 +67,6 @@ struct StagefrightRecorder : public MediaRecorderBase {
     virtual status_t prepare();
     virtual status_t start();
     virtual status_t pause();
-    virtual status_t resume();
     virtual status_t stop();
     virtual status_t close();
     virtual status_t reset();
@@ -134,11 +132,6 @@ protected:
 
     MediaProfiles *mEncoderProfiles;
 
-    int64_t mPauseStartTimeUs;
-    int64_t mTotalPausedDurationUs;
-    sp<MediaCodecSource> mAudioEncoderSource;
-    sp<MediaCodecSource> mVideoEncoderSource;
-
     bool mStarted;
     // Needed when GLFrames are encoded.
     // An <IGraphicBufferProducer> pointer
@@ -158,7 +151,7 @@ protected:
     status_t setupRawAudioRecording();
     status_t setupRTPRecording();
     status_t setupMPEG2TSRecording();
-    sp<MediaCodecSource> createAudioSource();
+    sp<MediaSource> createAudioSource();
     status_t checkVideoEncoderCapabilities();
     status_t checkAudioEncoderCapabilities();
     // Generic MediaSource set-up. Returns the appropriate
@@ -170,7 +163,7 @@ protected:
     status_t setupSurfaceMediaSource();
 
     status_t setupAudioEncoder(const sp<MediaWriter>& writer);
-    status_t setupVideoEncoder(sp<MediaSource> cameraSource, sp<MediaCodecSource> *source);
+    status_t setupVideoEncoder(sp<MediaSource> cameraSource, sp<MediaSource> *source);
     virtual void setupCustomVideoEncoderParams(sp<MediaSource> /*cameraSource*/,
             sp<AMessage> &/*format*/) {}
 
