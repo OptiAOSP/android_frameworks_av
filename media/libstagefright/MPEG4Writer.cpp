@@ -1973,7 +1973,7 @@ status_t MPEG4Writer::Track::pause() {
 }
 
 status_t MPEG4Writer::Track::stop() {
-    ALOGD("%s track stopping", mIsAudio? "Audio": "Video");
+    ALOGD("Stopping %s track", mIsAudio? "Audio": "Video");
     if (!mStarted) {
         ALOGE("Stop() called but track is not started");
         return ERROR_END_OF_STREAM;
@@ -1984,13 +1984,17 @@ status_t MPEG4Writer::Track::stop() {
     }
     mDone = true;
 
-    ALOGD("%s track source stopping", mIsAudio? "Audio": "Video");
-    mSource->stop();
-    ALOGD("%s track source stopped", mIsAudio? "Audio": "Video");
-
     void *dummy;
     pthread_join(mThread, &dummy);
     status_t err = static_cast<status_t>(reinterpret_cast<uintptr_t>(dummy));
+
+    ALOGD("Stopping %s track source", mIsAudio? "Audio": "Video");
+    {
+        status_t status = mSource->stop();
+        if (err == OK && status != OK && status != ERROR_END_OF_STREAM) {
+            err = status;
+        }
+    }
 
     ALOGD("%s track stopped", mIsAudio? "Audio": "Video");
     return err;
