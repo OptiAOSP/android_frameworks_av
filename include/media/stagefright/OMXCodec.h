@@ -34,15 +34,11 @@ struct OMXCodecObserver;
 struct CodecProfileLevel;
 class SkipCutBuffer;
 
-struct OMXCodec : public BnMediaSource,
+struct OMXCodec : public MediaSource,
                   public MediaBufferObserver {
     enum CreationFlags {
         kPreferSoftwareCodecs    = 1,
         kIgnoreCodecSpecificData = 2,
-
-        // The client wants to access the output buffer's video
-        // data for example for thumbnail extraction.
-        kClientNeedsFramebuffer  = 4,
 
         // Request for software or hardware codecs. If request
         // can not be fullfilled, Create() returns NULL.
@@ -61,10 +57,10 @@ struct OMXCodec : public BnMediaSource,
         // Secure decoding mode
         kUseSecureInputBuffers = 256,
     };
-    static sp<IMediaSource> Create(
+    static sp<MediaSource> Create(
             const sp<IOMX> &omx,
             const sp<MetaData> &meta, bool createEncoder,
-            const sp<IMediaSource> &source,
+            const sp<MediaSource> &source,
             const char *matchComponentName = NULL,
             uint32_t flags = 0,
             const sp<ANativeWindow> &nativeWindow = NULL);
@@ -124,6 +120,8 @@ struct OMXCodec : public BnMediaSource,
     static uint32_t getComponentQuirks(
             const sp<MediaCodecInfo> &list);
 
+    static bool findCodecQuirks(const char *componentName, uint32_t *quirks);
+
 protected:
     virtual ~OMXCodec();
 
@@ -144,6 +142,9 @@ private:
         EXECUTING_TO_IDLE,
         IDLE_TO_LOADED,
         RECONFIGURING,
+        PAUSING,
+        FLUSHING,
+        PAUSED,
         ERROR
     };
 
@@ -194,7 +195,7 @@ private:
     char *mMIME;
     char *mComponentName;
     sp<MetaData> mOutputFormat;
-    sp<IMediaSource> mSource;
+    sp<MediaSource> mSource;
     Vector<CodecSpecificData *> mCodecSpecificData;
     size_t mCodecSpecificDataIndex;
 
@@ -239,7 +240,7 @@ private:
     OMXCodec(const sp<IOMX> &omx, IOMX::node_id node,
              uint32_t quirks, uint32_t flags,
              bool isEncoder, const char *mime, const char *componentName,
-             const sp<IMediaSource> &source,
+             const sp<MediaSource> &source,
              const sp<ANativeWindow> &nativeWindow);
 
     void addCodecSpecificData(const void *data, size_t size);
@@ -353,6 +354,7 @@ private:
 
     status_t waitForBufferFilled_l();
 
+    status_t resumeLocked(bool drainInputBuf);
     int64_t getDecodingTimeUs();
 
     status_t parseHEVCCodecSpecificData(
@@ -407,6 +409,8 @@ status_t QueryCodec(
         const char *componentName, const char *mime,
         bool isEncoder,
         CodecCapabilities *caps);
+
+status_t getOMXChannelMapping(size_t numChannels, OMX_AUDIO_CHANNELTYPE map[]);
 
 }  // namespace android
 
