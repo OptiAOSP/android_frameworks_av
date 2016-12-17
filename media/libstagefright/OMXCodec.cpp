@@ -81,7 +81,7 @@ static sp<MediaSource> Make##name(const sp<MediaSource> &source, const sp<MetaDa
 
 #define FACTORY_REF(name) { #name, Make##name },
 
-//FACTORY_CREATE_ENCODER(AACEncoder)
+FACTORY_CREATE_ENCODER(AACEncoder)
 
 static sp<MediaSource> InstantiateSoftwareEncoder(
         const char *name, const sp<MediaSource> &source,
@@ -374,8 +374,24 @@ sp<MediaSource> OMXCodec::Create(
 
         ALOGV("Attempting to allocate OMX node '%s'", componentName);
 
-        status_t err = omx->allocateNode(componentName, observer, &node);
-        if (err == OK) {
+        status_t err = omx->allocateNode(componentName, observer,
+		NULL /* nodeBinder */, &node);
+        if (!createEncoder
+                && (quirks & kOutputBuffersAreUnreadable)
+                && (flags & kClientNeedsFramebuffer)) {
+            if (strncmp(componentName, "OMX.SEC.", 8)) {
+                // For OMX.SEC.* decoders we can enable a special mode that
+                // gives the client access to the framebuffer contents.
+
+                ALOGW("Component '%s' does not give the client access to "
+                     "the framebuffer contents. Skipping.",
+                     componentName);
+
+                continue;
+            }
+        }
+
+       if (err == OK) {
             ALOGV("Successfully allocated OMX node '%s'", componentName);
 
             sp<OMXCodec> codec = new OMXCodec(
@@ -1677,6 +1693,8 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
     size_t totalSize = def.nBufferCountActual * def.nBufferSize;
     mDealer[portIndex] = new MemoryDealer(totalSize, "OMXCodec");
 
+    sp<NativeHandle> native_handle;
+
     for (OMX_U32 i = 0; i < def.nBufferCountActual; ++i) {
         sp<IMemory> mem = mDealer[portIndex]->allocate(def.nBufferSize);
         if (mem == NULL || mem->pointer() == NULL) {
@@ -1692,11 +1710,12 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
                 && ((mQuirks & kRequiresAllocateBufferOnInputPorts)
                     || (mFlags & kUseSecureInputBuffers))) {
             if (mOMXLivesLocally) {
+		sp<NativeHandle> native_handle;
                 mem.clear();
 
-                err = mOMX->allocateBuffer(
+                err = mOMX->allocateSecureBuffer(
                         mNode, portIndex, def.nBufferSize, &buffer,
-                        &info.mData);
+                        &info.mData, &native_handle);
             } else {
                 err = mOMX->allocateBufferWithBackup(
                         mNode, portIndex, mem, &buffer, mem->size());
@@ -1704,11 +1723,12 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
         } else if (portIndex == kPortIndexOutput
                 && (mQuirks & kRequiresAllocateBufferOnOutputPorts)) {
             if (mOMXLivesLocally) {
+		sp<NativeHandle> native_handle;
                 mem.clear();
 
-                err = mOMX->allocateBuffer(
+                err = mOMX->allocateSecureBuffer(
                         mNode, portIndex, def.nBufferSize, &buffer,
-                        &info.mData);
+                        &info.mData, &native_handle);
             } else {
                 err = mOMX->allocateBufferWithBackup(
                         mNode, portIndex, mem, &buffer, mem->size());
@@ -1851,7 +1871,8 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
             def.format.video.eColorFormat,
 #endif
             rotationDegrees,
-            usage | GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP);
+            usage | GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP,
+            false /* reconnect */);
     if (err != 0) {
         return err;
     }
@@ -4104,7 +4125,8 @@ status_t OMXCodec::initNativeWindow() {
     // Enable use of a GraphicBuffer as the output for this node.  This must
     // happen before getting the IndexParamPortDefinition parameter because it
     // will affect the pixel format that the node reports.
-    status_t err = mOMX->enableGraphicBuffers(mNode, kPortIndexOutput, OMX_TRUE);
+    status_t err = mOMX->enableNativeBuffers(mNode, kPortIndexOutput, OMX_TRUE /* graphic */,
+		 OMX_TRUE /* enable */);
     if (err != 0) {
         return err;
     }
@@ -4444,7 +4466,8 @@ status_t QueryCodec(
 
     sp<OMXCodecObserver> observer = new OMXCodecObserver;
     IOMX::node_id node;
-    status_t err = omx->allocateNode(componentName, observer, &node);
+    status_t err = omx->allocateNode(componentName, observer,
+			NULL /* nodeBinder */, &node);
 
     if (err != OK) {
         return err;

@@ -1581,10 +1581,12 @@ bool StagefrightRecorder::setCustomVideoEncoderMime(const video_encoder videoEnc
         sp<AMessage> format) {
     sp<MetaData> enc_meta = new MetaData;
 
+#if 0
     if (videoEncoder == VIDEO_ENCODER_H265) {
         enc_meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_VIDEO_HEVC);
         return true;
     }
+#endif
     return false;
 }
 
@@ -1683,7 +1685,7 @@ status_t StagefrightRecorder::setupVideoEncoder(
         encoder_flags |= OMXCodec::kOnlySubmitOneInputBufferAtOneTime;
     }
 
-    sp<IMediaSource> encoder = OMXCodec::Create(
+    sp<MediaSource> encoder = OMXCodec::Create(
             client.interface(), enc_meta,
             true /* createEncoder */, cameraSource,
             NULL, encoder_flags);
@@ -1865,8 +1867,6 @@ status_t StagefrightRecorder::stop() {
         err = mWriter->stop();
         mWriter.clear();
     }
-    mTotalPausedDurationUs = 0;
-    mPauseStartTimeUs = 0;
 
     mPersistentSurface.clear();
 
