@@ -1577,19 +1577,6 @@ status_t StagefrightRecorder::setupCameraSource(
     return OK;
 }
 
-bool StagefrightRecorder::setCustomVideoEncoderMime(const video_encoder videoEncoder,
-        sp<AMessage> format) {
-    sp<MetaData> enc_meta = new MetaData;
-
-#if 0
-    if (videoEncoder == VIDEO_ENCODER_H265) {
-        enc_meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_VIDEO_HEVC);
-        return true;
-    }
-#endif
-    return false;
-}
-
 status_t StagefrightRecorder::setupVideoEncoder(
         sp<MediaSource> cameraSource,
         sp<MediaSource> *source) {
@@ -1700,8 +1687,6 @@ status_t StagefrightRecorder::setupVideoEncoder(
         return UNKNOWN_ERROR;
     }
 
-    mVideoSourceNode = cameraSource;
-    mVideoEncoderOMX = encoder;
     *source = encoder;
 
     return OK;
