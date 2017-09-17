@@ -48,7 +48,9 @@ public:
 
     virtual ssize_t write(const void *buffer, size_t count);
 
+#ifndef HAVE_PRE_KITKAT_AUDIO_BLOB
     virtual status_t getTimestamp(ExtendedTimestamp &timestamp);
+#endif
 
     // NBAIO_Sink end
 
