@@ -1251,7 +1251,7 @@ status_t ACodec::allocateOutputBuffersFromNativeWindow() {
             break;
         }
 
-        sp<GraphicBuffer> graphicBuffer(new GraphicBuffer(buf, false));
+        sp<GraphicBuffer> graphicBuffer(GraphicBuffer::from(buf));
         BufferInfo info;
         info.mStatus = BufferInfo::OWNED_BY_US;
         info.mFenceFd = fenceFd;
@@ -1555,7 +1555,7 @@ ACodec::BufferInfo *ACodec::dequeueBufferFromNativeWindow() {
     CHECK(storingMetadataInDecodedBuffers());
 
     // discard buffer in LRU info and replace with new buffer
-    oldest->mGraphicBuffer = new GraphicBuffer(buf, false);
+    oldest->mGraphicBuffer = GraphicBuffer::from(buf);
     oldest->mNewGraphicBuffer = true;
     oldest->mStatus = BufferInfo::OWNED_BY_US;
     oldest->setWriteFence(fenceFd, "dequeueBufferFromNativeWindow for oldest");
@@ -5834,7 +5834,7 @@ void ACodec::BaseState::onInputBufferFilled(const sp<AMessage> &msg) {
                 case IOMX::kPortModeDynamicANWBuffer:
                     if (info->mCodecData->size() >= sizeof(VideoNativeMetadata)) {
                         VideoNativeMetadata *vnmd = (VideoNativeMetadata*)info->mCodecData->base();
-                        sp<GraphicBuffer> graphicBuffer = new GraphicBuffer(vnmd->pBuffer, false);
+                        sp<GraphicBuffer> graphicBuffer = GraphicBuffer::from(vnmd->pBuffer);
                         err2 = mCodec->mOMXNode->emptyBuffer(
                             bufferID, graphicBuffer, flags, timeUs, info->mFenceFd);
                     }
