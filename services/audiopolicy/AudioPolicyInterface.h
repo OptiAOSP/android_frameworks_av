@@ -353,8 +353,10 @@ public:
                     audio_patch_handle_t patchHandle) = 0;
 };
 
+#ifndef USE_LEGACY_AUDIO_POLICY
 extern "C" AudioPolicyInterface* createAudioPolicyManager(AudioPolicyClientInterface *clientInterface);
 extern "C" void destroyAudioPolicyManager(AudioPolicyInterface *interface);
+#endif
 
 
 }; // namespace android
