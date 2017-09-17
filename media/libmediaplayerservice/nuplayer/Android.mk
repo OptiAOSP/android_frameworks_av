@@ -28,6 +28,10 @@ LOCAL_C_INCLUDES := \
 
 LOCAL_CFLAGS += -Werror -Wall
 
+ifeq ($(TARGET_NUPLAYER_CANNOT_SET_SURFACE_WITHOUT_A_FLUSH),true)
+LOCAL_CFLAGS += -DCANNOT_SET_SURFACE_WITHOUT_A_FLUSH
+endif
+
 # enable experiments only in userdebug and eng builds
 ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))
 LOCAL_CFLAGS += -DENABLE_STAGEFRIGHT_EXPERIMENTS
