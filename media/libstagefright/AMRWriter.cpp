@@ -148,17 +148,11 @@ status_t AMRWriter::reset() {
 
     mDone = true;
 
+    mSource->stop();
+
     void *dummy;
     pthread_join(mThread, &dummy);
-
     status_t err = static_cast<status_t>(reinterpret_cast<uintptr_t>(dummy));
-    {
-        status_t status = mSource->stop();
-        if (err == OK &&
-            (status != OK && status != ERROR_END_OF_STREAM)) {
-            err = status;
-        }
-    }
 
     mStarted = false;
     return err;
