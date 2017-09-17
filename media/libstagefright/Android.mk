@@ -130,7 +130,7 @@ ifeq ($(TARGET_HAS_LEGACY_CAMERA_HAL1),true)
 LOCAL_CFLAGS += -DCAMCORDER_GRALLOC_SOURCE
 endif
 
-LOCAL_CFLAGS += -Wno-multichar -Werror -Wno-error=deprecated-declarations -Wall
+LOCAL_CFLAGS += -Wno-multichar -Wno-error=deprecated-declarations -Wall
 
 # enable experiments only in userdebug and eng builds
 ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))

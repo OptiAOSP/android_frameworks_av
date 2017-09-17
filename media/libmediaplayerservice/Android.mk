@@ -59,7 +59,7 @@ LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/frameworks/native/include/media/hardware                 \
     $(TOP)/external/tremolo/Tremolo                                 \
 
-LOCAL_CFLAGS += -Werror -Wno-error=deprecated-declarations -Wall
+LOCAL_CFLAGS += -Wno-error=deprecated-declarations -Wall
 
 LOCAL_MODULE:= libmediaplayerservice
 
