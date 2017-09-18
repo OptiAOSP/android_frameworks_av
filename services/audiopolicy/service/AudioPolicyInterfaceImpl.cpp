@@ -59,6 +59,23 @@ audio_policy_dev_state_t AudioPolicyService::getDeviceConnectionState(
                                                       device_address);
 }
 
+status_t AudioPolicyService::handleDeviceConfigChange(audio_devices_t device,
+                                                  const char *device_address,
+                                                  const char *device_name)
+{
+    if (mAudioPolicyManager == NULL) {
+        return NO_INIT;
+    }
+    if (!settingsAllowed()) {
+        return PERMISSION_DENIED;
+    }
+
+    ALOGV("handleDeviceConfigChange()");
+    Mutex::Autolock _l(mLock);
+    return mAudioPolicyManager->handleDeviceConfigChange(device, device_address,
+                                                         device_name);
+}
+
 status_t AudioPolicyService::setPhoneState(audio_mode_t state)
 {
     if (mAudioPolicyManager == NULL) {
