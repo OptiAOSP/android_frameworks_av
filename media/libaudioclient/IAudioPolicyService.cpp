@@ -33,7 +33,6 @@ namespace android {
 enum {
     SET_DEVICE_CONNECTION_STATE = IBinder::FIRST_CALL_TRANSACTION,
     GET_DEVICE_CONNECTION_STATE,
-    HANDLE_DEVICE_CONFIG_CHANGE,
     SET_PHONE_STATE,
     SET_RINGER_MODE,    // reserved, no longer used
     SET_FORCE_USE,
@@ -115,19 +114,6 @@ public:
         data.writeCString(device_address);
         remote()->transact(GET_DEVICE_CONNECTION_STATE, data, &reply);
         return static_cast <audio_policy_dev_state_t>(reply.readInt32());
-    }
-
-    virtual status_t handleDeviceConfigChange(audio_devices_t device,
-                                              const char *device_address,
-                                              const char *device_name)
-    {
-        Parcel data, reply;
-        data.writeInterfaceToken(IAudioPolicyService::getInterfaceDescriptor());
-        data.writeInt32(static_cast <uint32_t>(device));
-        data.writeCString(device_address);
-        data.writeCString(device_name);
-        remote()->transact(HANDLE_DEVICE_CONFIG_CHANGE, data, &reply);
-        return static_cast <status_t> (reply.readInt32());
     }
 
     virtual status_t setPhoneState(audio_mode_t state)
@@ -857,23 +843,6 @@ status_t BnAudioPolicyService::onTransact(
             } else {
                 reply->writeInt32(static_cast<uint32_t> (getDeviceConnectionState(device,
                                                                                   device_address)));
-            }
-            return NO_ERROR;
-        } break;
-
-        case HANDLE_DEVICE_CONFIG_CHANGE: {
-            CHECK_INTERFACE(IAudioPolicyService, data, reply);
-            audio_devices_t device =
-                    static_cast <audio_devices_t>(data.readInt32());
-            const char *device_address = data.readCString();
-            const char *device_name = data.readCString();
-            if (device_address == nullptr || device_name == nullptr) {
-                ALOGE("Bad Binder transaction: HANDLE_DEVICE_CONFIG_CHANGE for device %u", device);
-                reply->writeInt32(static_cast<int32_t> (BAD_VALUE));
-            } else {
-                reply->writeInt32(static_cast<uint32_t> (handleDeviceConfigChange(device,
-                                                                                  device_address,
-                                                                                  device_name)));
             }
             return NO_ERROR;
         } break;
