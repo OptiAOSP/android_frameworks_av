@@ -67,6 +67,14 @@ audio_policy_dev_state_t AudioPolicyService::getDeviceConnectionState(
                                                       device_address);
 }
 
+status_t AudioPolicyService::handleDeviceConfigChange(audio_devices_t device,
+                                                  const char *device_address,
+                                                  const char *device_name)
+{
+    ALOGE("handleDeviceConfigChange()");
+    return INVALID_OPERATION;
+}
+
 status_t AudioPolicyService::setPhoneState(audio_mode_t state)
 {
     if (mpAudioPolicy == NULL) {
