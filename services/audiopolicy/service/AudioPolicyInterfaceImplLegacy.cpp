@@ -250,11 +250,10 @@ status_t AudioPolicyService::getInputForAttr(const audio_attributes_t *attr,
                                              audio_session_t session,
                                              pid_t pid __unused,
                                              uid_t uid __unused,
-                                             uint32_t samplingRate,
-                                             audio_format_t format,
-                                             audio_channel_mask_t channelMask,
-                                             audio_input_flags_t flags __unused,
-                                             audio_port_handle_t selectedDeviceId __unused)
+                                             const audio_config_base_t *config,
+                                             audio_input_flags_t flags,
+                                             audio_port_handle_t selectedDeviceId,
+                                             audio_port_handle_t *portId)
 {
     if (mpAudioPolicy == NULL) {
         return NO_INIT;
@@ -285,8 +284,8 @@ status_t AudioPolicyService::getInputForAttr(const audio_attributes_t *attr,
     {
         Mutex::Autolock _l(mLock);
         // the audio_in_acoustics_t parameter is ignored by get_input()
-        *input = mpAudioPolicy->get_input(mpAudioPolicy, inputSource, samplingRate,
-                                             format, channelMask, (audio_in_acoustics_t) 0);
+        *input = mpAudioPolicy->get_input(mpAudioPolicy, inputSource, config->sample_rate,
+                                            config->format, config->channel_mask, (audio_in_acoustics_t) 0);
         audioPolicyEffects = mAudioPolicyEffects;
     }
     if (*input == AUDIO_IO_HANDLE_NONE) {
@@ -586,17 +585,21 @@ status_t AudioPolicyService::setAudioPortConfig(const struct audio_port_config *
     return INVALID_OPERATION;
 }
 
+/*    uint32_t sample_rate;
+    audio_channel_mask_t channel_mask;
+    audio_format_t  format;
+    audio_offload_info_t offload_info;
+*/
+
 status_t AudioPolicyService::getOutputForAttr(const audio_attributes_t *attr,
                                               audio_io_handle_t *output,
                                               audio_session_t session __unused,
                                               audio_stream_type_t *stream,
                                               uid_t uid __unused,
-                                              uint32_t samplingRate,
-                                              audio_format_t format,
-                                              audio_channel_mask_t channelMask,
+					      const audio_config_t *config,
                                               audio_output_flags_t flags,
-                                              audio_port_handle_t selectedDeviceId __unused,
-                                              const audio_offload_info_t *offloadInfo)
+                                              audio_port_handle_t selectedDeviceId,
+                                              audio_port_handle_t *portId)
 {
     if (attr != NULL) {
         *stream = audio_attributes_to_stream_type(attr);
@@ -605,8 +608,8 @@ status_t AudioPolicyService::getOutputForAttr(const audio_attributes_t *attr,
             return BAD_VALUE;
         }
     }
-    *output = getOutput(*stream, samplingRate, format, channelMask,
-                                          flags, offloadInfo);
+    *output = getOutput(*stream, config->sample_rate, config->format, config->channel_mask,
+                                          flags, &(config->offload_info));
     if (*output == AUDIO_IO_HANDLE_NONE) {
         return INVALID_OPERATION;
     }
