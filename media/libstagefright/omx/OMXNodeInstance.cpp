@@ -375,7 +375,7 @@ OMXNodeInstance::OMXNodeInstance(
     mGraphicBufferEnabled[0] = false;
     mGraphicBufferEnabled[1] = false;
     mIsSecure = AString(name).endsWith(".secure");
-    mLegacyAdaptiveExperiment = ADebug::isExperimentEnabled("legacy-adaptive");
+    mLegacyAdaptiveExperiment = true; //ADebug::isExperimentEnabled("legacy-adaptive");
 }
 
 OMXNodeInstance::~OMXNodeInstance() {
@@ -749,7 +749,8 @@ status_t OMXNodeInstance::setPortMode(OMX_U32 portIndex, IOMX::PortMode mode) {
             CLOG_INTERNAL(setPortMode, "Legacy adaptive experiment: "
                     "unable to enable metadata mode on output");
 
-            mLegacyAdaptiveExperiment = false;
+	    ALOGE("//mLegacyAdaptiveExperiment = false;");
+            //mLegacyAdaptiveExperiment = false;
         }
 
         // Disable secure buffer and enable graphic buffer

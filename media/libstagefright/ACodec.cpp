@@ -840,11 +840,15 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
 #ifdef STE_HARDWARE
         err = allocateOutputBuffersFromNativeWindow();
 #else
+#if 0
         if (storingMetadataInDecodedBuffers()) {
             err = allocateOutputMetadataBuffers();
         } else {
+#endif
             err = allocateOutputBuffersFromNativeWindow();
+#if 0
         }
+#endif
 #endif
     } else {
         OMX_PARAM_PORTDEFINITIONTYPE def;
@@ -1121,11 +1125,11 @@ status_t ACodec::setupNativeWindowSizeFormatAndUsage(
             nativeWindow,
             def.format.video.nFrameWidth,
             def.format.video.nFrameHeight,
-//#ifdef STE_HARDWARE
-            //OMXCodec::OmxToHALFormat(def.format.video.eColorFormat),
-//#else
-            def.format.video.eColorFormat,
-//#endif
+#ifdef STE_HARDWARE
+            ACodec::OmxToHALFormat(def.format.video.eColorFormat),
+#else
+//          def.format.video.eColorFormat,
+#endif
             mRotationDegrees,
             usage,
             reconnect);
@@ -1227,8 +1231,9 @@ status_t ACodec::configureOutputBuffersFromNativeWindow(
 status_t ACodec::allocateOutputBuffersFromNativeWindow() {
     // This method only handles the non-metadata mode (or simulating legacy
     // mode with metadata, which is transparent to ACodec).
+#ifndef STE_HARDWARE
     CHECK(!storingMetadataInDecodedBuffers());
-
+#endif
     OMX_U32 bufferCount, bufferSize, minUndequeuedBuffers;
     status_t err = configureOutputBuffersFromNativeWindow(
             &bufferCount, &bufferSize, &minUndequeuedBuffers, true /* preregister */);
@@ -1236,14 +1241,14 @@ status_t ACodec::allocateOutputBuffersFromNativeWindow() {
         return err;
     mNumUndequeuedBuffers = minUndequeuedBuffers;
 
+#ifndef STE_HARDWARE
     static_cast<Surface*>(mNativeWindow.get())
             ->getIGraphicBufferProducer()->allowAllocation(true);
-
+#endif
     ALOGV("[%s] Allocating %u buffers from a native window of size %u on "
          "output port",
          mComponentName.c_str(), bufferCount, bufferSize);
 
-    // Dequeue buffers and send them to OMX
     for (OMX_U32 i = 0; i < bufferCount; i++) {
         ANativeWindowBuffer *buf;
         int fenceFd;
@@ -1262,11 +1267,13 @@ status_t ACodec::allocateOutputBuffersFromNativeWindow() {
         info.mGraphicBuffer = graphicBuffer;
         info.mNewGraphicBuffer = false;
 
+#ifndef STE_HARDWARE
         // TODO: We shouln't need to create MediaCodecBuffer. In metadata mode
         //       OMX doesn't use the shared memory buffer, but some code still
         //       access info.mData. Create an ABuffer as a placeholder.
         info.mData = new MediaCodecBuffer(mOutputFormat, new ABuffer(bufferSize));
         info.mCodecData = info.mData;
+#endif
 
         mBuffers[kPortIndexOutput].push(info);
 
@@ -1309,15 +1316,17 @@ status_t ACodec::allocateOutputBuffersFromNativeWindow() {
         }
     }
 
+#ifndef STE_HARDWARE
     static_cast<Surface*>(mNativeWindow.get())
             ->getIGraphicBufferProducer()->allowAllocation(false);
-
+#endif
     return err;
 }
 
 status_t ACodec::allocateOutputMetadataBuffers() {
+#ifndef STE_HARDWARE
     CHECK(storingMetadataInDecodedBuffers());
-
+#endif
     OMX_U32 bufferCount, bufferSize, minUndequeuedBuffers;
     status_t err = configureOutputBuffersFromNativeWindow(
             &bufferCount, &bufferSize, &minUndequeuedBuffers,
@@ -7192,6 +7201,20 @@ bool ACodec::ExecutingState::onMessageReceived(const sp<AMessage> &msg) {
 
     return handled;
 }
+
+#ifdef STE_HARDWARE
+uint32_t ACodec::OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue) {
+    switch (omxValue) {
+        case OMX_STE_COLOR_FormatYUV420PackedSemiPlanarMB:
+            return HAL_PIXEL_FORMAT_YCBCR42XMBN;
+        case OMX_COLOR_FormatYUV420Planar:
+            return HAL_PIXEL_FORMAT_YCbCr_420_P;
+        default:
+            ALOGI("Unknown OMX pixel format (0x%X), passing it on unchanged", omxValue);
+            return omxValue;
+    }
+}
+#endif
 
 status_t ACodec::setParameters(const sp<AMessage> &params) {
     int32_t videoBitrate;

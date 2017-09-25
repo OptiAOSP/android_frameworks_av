@@ -552,6 +552,7 @@ private:
 
     status_t requestIDRFrame();
     status_t setParameters(const sp<AMessage> &params);
+    uint32_t OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue);
 
     // set vendor extension parameters specified in params that are supported by the codec
     status_t setVendorParameters(const sp<AMessage> &params);
