@@ -424,7 +424,7 @@ status_t MediaSender::packetizeAccessUnit(
 
             sp<GraphicBuffer> grbuf(new GraphicBuffer(
                     rangeOffset + rangeLength /* width */, 1 /* height */,
-                    HAL_PIXEL_FORMAT_Y8, 1 /* layerCount */,
+                    HAL_PIXEL_FORMAT_Y8,
                     GRALLOC_USAGE_HW_VIDEO_ENCODER,
                     rangeOffset + rangeLength /* stride */, handle,
                     false /* keepOwnership */));

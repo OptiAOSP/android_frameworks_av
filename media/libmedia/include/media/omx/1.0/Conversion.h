@@ -560,7 +560,7 @@ inline void wrapAs(AnwBuffer* t, GraphicBuffer const& l) {
     t->attr.height = l.getHeight();
     t->attr.stride = l.getStride();
     t->attr.format = static_cast<PixelFormat>(l.getPixelFormat());
-    t->attr.layerCount = l.getLayerCount();
+    t->attr.layerCount = 1;
     t->attr.usage = l.getUsage();
     t->attr.id = l.getId();
     t->attr.generationNumber = l.getGenerationNumber();
@@ -665,7 +665,7 @@ inline bool wrapAs(CodecBuffer* t, OMXBuffer const& l) {
             t->attr.anwBuffer.stride = l.mGraphicBuffer->getStride();
             t->attr.anwBuffer.format = static_cast<PixelFormat>(
                     l.mGraphicBuffer->getPixelFormat());
-            t->attr.anwBuffer.layerCount = l.mGraphicBuffer->getLayerCount();
+            t->attr.anwBuffer.layerCount = 1;
             t->attr.anwBuffer.usage = l.mGraphicBuffer->getUsage();
             t->nativeHandle = l.mGraphicBuffer->handle;
             return true;
