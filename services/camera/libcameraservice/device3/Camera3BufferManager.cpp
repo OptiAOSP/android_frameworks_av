@@ -274,9 +274,7 @@ status_t Camera3BufferManager::getBufferForStream(int streamId, int streamSetId,
         GraphicBufferEntry buffer;
         buffer.fenceFd = -1;
         buffer.graphicBuffer = new GraphicBuffer(
-                info.width, info.height, PixelFormat(info.format), info.combinedUsage,
-                std::string("Camera3BufferManager pid [") +
-                        std::to_string(getpid()) + "]");
+                info.width, info.height, PixelFormat(info.format), info.combinedUsage);
         status_t res = buffer.graphicBuffer->initCheck();
 
         ALOGV("%s: allocating a new graphic buffer (%dx%d, format 0x%x) %p with handle %p",

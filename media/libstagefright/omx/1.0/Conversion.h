@@ -553,7 +553,7 @@ inline void wrapAs(AnwBuffer* t, GraphicBuffer const& l) {
     t->attr.height = l.getHeight();
     t->attr.stride = l.getStride();
     t->attr.format = static_cast<PixelFormat>(l.getPixelFormat());
-    t->attr.layerCount = l.getLayerCount();
+    t->attr.layerCount = 1;
     t->attr.usage = l.getUsage();
     t->attr.id = l.getId();
     t->attr.generationNumber = l.getGenerationNumber();
@@ -636,7 +636,7 @@ inline CodecBuffer *wrapAs(CodecBuffer *t, sp<GraphicBuffer> const& graphicBuffe
     t->attr.anwBuffer.stride = graphicBuffer->getStride();
     t->attr.anwBuffer.format = static_cast<PixelFormat>(
             graphicBuffer->getPixelFormat());
-    t->attr.anwBuffer.layerCount = graphicBuffer->getLayerCount();
+    t->attr.anwBuffer.layerCount = 1;
     t->attr.anwBuffer.usage = graphicBuffer->getUsage();
     t->nativeHandle = graphicBuffer->handle;
     return t;
