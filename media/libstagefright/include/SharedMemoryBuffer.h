@@ -19,7 +19,6 @@
 #define SHARED_MEMORY_BUFFER_H_
 
 #include <media/MediaCodecBuffer.h>
-#include <android/hidl/memory/1.0/IMemory.h>
 
 namespace android {
 
@@ -31,9 +30,7 @@ class IMemory;
  */
 class SharedMemoryBuffer : public MediaCodecBuffer {
 public:
-    typedef ::android::hidl::memory::V1_0::IMemory TMemory;
     SharedMemoryBuffer(const sp<AMessage> &format, const sp<IMemory> &mem);
-    SharedMemoryBuffer(const sp<AMessage> &format, const sp<TMemory> &mem);
 
     virtual ~SharedMemoryBuffer() = default;
 
@@ -41,7 +38,6 @@ private:
     SharedMemoryBuffer() = delete;
 
     const sp<IMemory> mMemory;
-    const sp<TMemory> mTMemory;
 };
 
 }  // namespace android
