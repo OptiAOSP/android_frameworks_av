@@ -149,7 +149,7 @@ AImageReader::BufferRemovedListener::onBufferFreed(const wp<GraphicBuffer>& grap
     msg->setPointer(
         AImageReader::kCallbackFpKey, (void*) mListener.onBufferRemoved);
     msg->setPointer(AImageReader::kContextKey, mListener.context);
-    msg->setObject(AImageReader::kGraphicBufferKey, gBuffer);
+    //msg->setObject(AImageReader::kGraphicBufferKey, gBuffer);
     msg->post();
 }
 
