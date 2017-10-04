@@ -117,10 +117,6 @@ LOCAL_SHARED_LIBRARIES += \
         libstagefright_foundation \
         libdl \
         libRScpp \
-        libhidlbase \
-        libhidlmemory \
-        android.hidl.allocator@1.0 \
-        android.hidl.memory@1.0 \
         android.hardware.media.omx@1.0 \
         libstagefright_xmlparser@1.0 \
 
