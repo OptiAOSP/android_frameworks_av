@@ -1382,7 +1382,7 @@ void NuPlayer::onStart(int64_t startPositionUs) {
 
     sp<MetaData> audioMeta = mSource->getFormatMeta(true /* audio */);
     sp<MetaData> videoMeta = mSource->getFormatMeta(false /* audio */);
-    if (audioMeta == NULL && videoMeta == NULL) {
+    if ((audioMeta == NULL && videoMeta == NULL) && !(mSource->isStreaming())) {
         ALOGE("no metadata for either audio or video source");
         mSource->stop();
         mSourceStarted = false;
