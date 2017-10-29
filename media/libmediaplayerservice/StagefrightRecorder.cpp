@@ -1120,12 +1120,19 @@ status_t StagefrightRecorder::setupRTPRecording() {
         return BAD_VALUE;
     }
 
-    sp<MediaCodecSource> source;
 
     if (mAudioSource != AUDIO_SOURCE_CNT) {
+    sp<MediaCodecSource> source;
+
         source = createAudioSource();
         mAudioEncoderSource = source;
+
+    mWriter = new ARTPWriter(mOutputFd);
+    mWriter->addSource(source);
+    mWriter->setListener(mListener);
     } else {
+    sp<MediaSource> source;
+
         setDefaultVideoEncoderIfNecessary();
 
         sp<MediaSource> mediaSource;
@@ -1139,11 +1146,13 @@ status_t StagefrightRecorder::setupRTPRecording() {
             return err;
         }
         mVideoEncoderSource = source;
-    }
 
     mWriter = new ARTPWriter(mOutputFd);
     mWriter->addSource(source);
     mWriter->setListener(mListener);
+
+
+    }
 
     return OK;
 }
@@ -1179,7 +1188,7 @@ status_t StagefrightRecorder::setupMPEG2TSRecording() {
             return err;
         }
 
-        sp<MediaCodecSource> encoder;
+        sp<MediaSource> encoder;
         err = setupVideoEncoder(mediaSource, &encoder);
 
         if (err != OK) {
@@ -1588,7 +1597,7 @@ status_t StagefrightRecorder::setupCameraSource(
 
 status_t StagefrightRecorder::setupVideoEncoder(
         sp<MediaSource> cameraSource,
-        sp<MediaCodecSource> *source) {
+        sp<MediaSource> *source) {
     source->clear();
 
     sp<AMessage> format = new AMessage();
@@ -1789,7 +1798,7 @@ status_t StagefrightRecorder::setupMPEG4orWEBMRecording() {
             return err;
         }
 
-        sp<MediaCodecSource> encoder;
+        sp<MediaSource> encoder;
         err = setupVideoEncoder(mediaSource, &encoder);
         if (err != OK) {
             return err;
@@ -1898,17 +1907,28 @@ status_t StagefrightRecorder::resume() {
 
     int64_t bufferStartTimeUs = 0;
     bool allSourcesStarted = true;
-    for (const auto &source : { mAudioEncoderSource, mVideoEncoderSource }) {
-        if (source == nullptr) {
-            continue;
-        }
-        int64_t timeUs = source->getFirstSampleSystemTimeUs();
-        if (timeUs < 0) {
-            allSourcesStarted = false;
-        }
-        if (bufferStartTimeUs < timeUs) {
-            bufferStartTimeUs = timeUs;
-        }
+    int64_t timeUs;
+    {
+        if (mAudioEncoderSource != nullptr) {
+	        timeUs = mAudioEncoderSource->getFirstSampleSystemTimeUs();
+	        if (timeUs < 0) {
+	            allSourcesStarted = false;
+	        }
+	        if (bufferStartTimeUs < timeUs) {
+	            bufferStartTimeUs = timeUs;
+	        }
+	 }
+#if 0
+        if (mVideoEncoderSource != nullptr) {
+	        timeUs = mVideoEncoderSource->getFirstSampleSystemTimeUs();
+	        if (timeUs < 0) {
+	            allSourcesStarted = false;
+	        }
+	        if (bufferStartTimeUs < timeUs) {
+	            bufferStartTimeUs = timeUs;
+	        }
+	 }
+#endif
     }
 
     if (allSourcesStarted) {
@@ -1922,12 +1942,18 @@ status_t StagefrightRecorder::resume() {
     if (mCaptureFpsEnable) {
         timeOffset *= mCaptureFps / mFrameRate;
     }
-    for (const auto &source : { mAudioEncoderSource, mVideoEncoderSource }) {
-        if (source == nullptr) {
-            continue;
+
+    {
+        if (mAudioEncoderSource != nullptr) {
+            mAudioEncoderSource->setInputBufferTimeOffset((int64_t)timeOffset);
+            mAudioEncoderSource->start();
         }
-        source->setInputBufferTimeOffset((int64_t)timeOffset);
-        source->start();
+#if 0
+        if (mVideoEncoderSource != nullptr) {
+            mVideoEncoderSource->setInputBufferTimeOffset((int64_t)timeOffset);
+            mVideoEncoderSource->start();
+        }
+#endif
     }
     mPauseStartTimeUs = 0;
 
