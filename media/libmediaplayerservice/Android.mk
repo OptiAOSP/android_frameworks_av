@@ -72,7 +72,7 @@ LOCAL_C_INCLUDES :=                                                 \
     $(TOP)/frameworks/av/media/libavextensions                      \
     $(TOP)/frameworks/av/media/libstagefright/mpeg2ts               \
 
-LOCAL_CFLAGS += -Werror -Wno-error=deprecated-declarations -Wall
+LOCAL_CFLAGS += -Wno-error=deprecated-declarations -Wall
 
 ifneq ($(TARGET_HAS_LEGACY_CAMERA_HAL1), true)
 LOCAL_C_INCLUDES += \
