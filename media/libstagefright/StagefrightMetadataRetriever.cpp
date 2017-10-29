@@ -38,12 +38,11 @@
 #include <media/stagefright/FileSource.h>
 #include <media/stagefright/MediaBuffer.h>
 #include <media/stagefright/MediaCodec.h>
-#include <media/stagefright/MediaCodecList.h>
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/MediaErrors.h>
 #include <media/stagefright/MediaExtractor.h>
-#include <media/stagefright/MediaSource.h>
 #include <media/stagefright/MetaData.h>
+#include <media/stagefright/OMXCodec.h>
 #include <media/stagefright/Utils.h>
 
 #include <CharacterEncodingDetector.h>
@@ -61,6 +60,7 @@ StagefrightMetadataRetriever::StagefrightMetadataRetriever()
     ALOGV("StagefrightMetadataRetriever()");
 
     DataSource::RegisterDefaultSniffers();
+    CHECK_EQ(mClient.connect(), (status_t)OK);
 }
 
 StagefrightMetadataRetriever::~StagefrightMetadataRetriever() {
@@ -69,6 +69,7 @@ StagefrightMetadataRetriever::~StagefrightMetadataRetriever() {
     if (mSource != NULL) {
         mSource->close();
     }
+    mClient.disconnect();
 }
 
 status_t StagefrightMetadataRetriever::setDataSource(
@@ -525,11 +526,12 @@ VideoFrame *StagefrightMetadataRetriever::getFrameAtTime(
     const char *mime;
     CHECK(trackMeta->findCString(kKeyMIMEType, &mime));
 
-    Vector<AString> matchingCodecs;
-    MediaCodecList::findMatchingCodecs(
+    Vector<OMXCodec::CodecNameAndQuirks> matchingCodecs;
+    OMXCodec::findMatchingCodecs(
             mime,
             false, /* encoder */
-            0 /* MediaCodecList::kPreferSoftwareCodecs */,
+            NULL, /* matchComponentName */
+            OMXCodec::kPreferSoftwareCodecs,
             &matchingCodecs);
 
     for (size_t i = 0; i < matchingCodecs.size(); ++i) {
@@ -538,10 +540,10 @@ VideoFrame *StagefrightMetadataRetriever::getFrameAtTime(
             FFMPEGSoftCodec::overrideComponentName(0, trackMeta, mime, false);
         if (ffmpegComponentName != NULL) {
             ALOGV("override compoent %s to %s for video frame extraction.",
-                    matchingCodecs[i].c_str(), ffmpegComponentName);
+                    matchingCodecs[i].mName.string(), ffmpegComponentName);
             componentName.setTo(ffmpegComponentName);
         } else {
-            componentName = matchingCodecs[i];
+            componentName = matchingCodecs[i].mName.string();
         }
 
         VideoFrame *frame =
