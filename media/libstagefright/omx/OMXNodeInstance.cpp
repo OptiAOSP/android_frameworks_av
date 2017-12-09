@@ -99,51 +99,30 @@ static const OMX_U32 kPortIndexOutput = 1;
 namespace android {
 
 struct BufferMeta {
-#ifndef METADATA_CAMERA_SOURCE
     explicit BufferMeta(
             const sp<IMemory> &mem, const sp<IHidlMemory> &hidlMemory,
             OMX_U32 portIndex, bool copy, OMX_U8 *backup)
-#else
-    explicit BufferMeta(
-                     const sp<IMemory> &mem, const sp<IHidlMemory> &hidlMemory,
-                     OMX_U32 portIndex, bool is_backup = false)
-#endif
         : mMem(mem),
           mHidlMemory(hidlMemory),
-#ifndef METADATA_CAMERA_SOURCE
           mCopyFromOmx(portIndex == kPortIndexOutput && copy),
           mCopyToOmx(portIndex == kPortIndexInput && copy),
           mPortIndex(portIndex),
           mBackup(backup) {
-#else
-          mIsBackup(is_backup),
-          mPortIndex(portIndex) {
-#endif
     }
 
     explicit BufferMeta(OMX_U32 portIndex) :
-#ifndef METADATA_CAMERA_SOURCE
             mCopyFromOmx(false),
             mCopyToOmx(false),
             mPortIndex(portIndex),
             mBackup(NULL) {
-#else
-            mIsBackup(false),
-            mPortIndex(portIndex) {
-#endif
     }
 
     explicit BufferMeta(const sp<GraphicBuffer> &graphicBuffer, OMX_U32 portIndex)
         : mGraphicBuffer(graphicBuffer),
-#ifndef METADATA_CAMERA_SOURCE
           mCopyFromOmx(false),
           mCopyToOmx(false),
           mPortIndex(portIndex),
           mBackup(NULL) {
-#else
-          mIsBackup(false),
-          mPortIndex(portIndex) {
-#endif
     }
 
     OMX_U8 *getPointer() {
@@ -153,11 +132,7 @@ struct BufferMeta {
     }
 
     void CopyFromOMX(const OMX_BUFFERHEADERTYPE *header) {
-#ifndef METADATA_CAMERA_SOURCE
         if (!mCopyToOmx) {
-#else
-        if (!mIsBackup) {
-#endif
             return;
         }
 
@@ -168,11 +143,7 @@ struct BufferMeta {
     }
 
     void CopyToOMX(const OMX_BUFFERHEADERTYPE *header) {
-#ifndef METADATA_CAMERA_SOURCE
         if (!mCopyToOmx) {
-#else
-        if (!mIsBackup) {
-#endif
             return;
         }
 
@@ -206,26 +177,18 @@ struct BufferMeta {
     OMX_U32 getPortIndex() {
         return mPortIndex;
     }
-#ifndef METADATA_CAMERA_SOURCE
     ~BufferMeta() {
         delete[] mBackup;
     }
-#endif
 private:
     sp<GraphicBuffer> mGraphicBuffer;
     sp<NativeHandle> mNativeHandle;
     sp<IMemory> mMem;
     sp<IHidlMemory> mHidlMemory;
-#ifndef METADATA_CAMERA_SOURCE
-      bool mCopyFromOmx;
-      bool mCopyToOmx;
-#else
-    bool mIsBackup;
-#endif
+    bool mCopyFromOmx;
+    bool mCopyToOmx;
     OMX_U32 mPortIndex;
-#ifndef METADATA_CAMERA_SOURCE
     OMX_U8 *mBackup;
-#endif
 
     BufferMeta(const BufferMeta &);
     BufferMeta &operator=(const BufferMeta &);
@@ -1219,12 +1182,12 @@ status_t OMXNodeInstance::useBuffer_l(
             memset(data, 0, allottedSize);
 
             buffer_meta = new BufferMeta(
-                    params, hParams, portIndex);
+                    params, hParams, portIndex, false /* copy */, data);
         } else {
             data = static_cast<OMX_U8 *>(params->pointer());
 
             buffer_meta = new BufferMeta(
-                    params, hParams, portIndex);
+                    params, hParams, portIndex, false /* copy */, NULL);
         }
 
         err = OMX_UseBuffer(
@@ -1235,9 +1198,7 @@ status_t OMXNodeInstance::useBuffer_l(
             CLOG_ERROR(useBuffer, err, SIMPLE_BUFFER(
                     portIndex, (size_t)allottedSize, data));
         }
-#if 0
-    }
-#endif
+//    }
 /*#else
     buffer_meta = new BufferMeta(
             params, hParams, portIndex);
