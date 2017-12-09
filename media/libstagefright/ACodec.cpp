@@ -824,15 +824,11 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
 #ifdef STE_HARDWARE
         err = allocateOutputBuffersFromNativeWindow();
 #else
-#if 0
         if (storingMetadataInDecodedBuffers()) {
             err = allocateOutputMetadataBuffers();
         } else {
-#endif
             err = allocateOutputBuffersFromNativeWindow();
-#if 0
         }
-#endif
 #endif
     } else {
         OMX_PARAM_PORTDEFINITIONTYPE def;
@@ -1150,7 +1146,8 @@ status_t ACodec::configureOutputBuffersFromNativeWindow(
 status_t ACodec::allocateOutputBuffersFromNativeWindow() {
     // This method only handles the non-metadata mode (or simulating legacy
     // mode with metadata, which is transparent to ACodec).
-#ifndef STE_HARDWARE
+    ALOGD("%s: storingMetadataInDecodedBuffers = %d", __func__, storingMetadataInDecodedBuffers());
+#if 0
     CHECK(!storingMetadataInDecodedBuffers());
 #endif
     OMX_U32 bufferCount, bufferSize, minUndequeuedBuffers;
@@ -1160,10 +1157,8 @@ status_t ACodec::allocateOutputBuffersFromNativeWindow() {
         return err;
     mNumUndequeuedBuffers = minUndequeuedBuffers;
 
-#ifndef STE_HARDWARE
     static_cast<Surface*>(mNativeWindow.get())
             ->getIGraphicBufferProducer()->allowAllocation(true);
-#endif
     ALOGV("[%s] Allocating %u buffers from a native window of size %u on "
          "output port",
          mComponentName.c_str(), bufferCount, bufferSize);
@@ -1186,13 +1181,13 @@ status_t ACodec::allocateOutputBuffersFromNativeWindow() {
         info.mGraphicBuffer = graphicBuffer;
         info.mNewGraphicBuffer = false;
 
-#ifndef STE_HARDWARE
+//#ifndef STE_HARDWARE
         // TODO: We shouln't need to create MediaCodecBuffer. In metadata mode
         //       OMX doesn't use the shared memory buffer, but some code still
         //       access info.mData. Create an ABuffer as a placeholder.
         info.mData = new MediaCodecBuffer(mOutputFormat, new ABuffer(bufferSize));
         info.mCodecData = info.mData;
-#endif
+//#endif
 
         mBuffers[kPortIndexOutput].push(info);
 

@@ -99,51 +99,30 @@ static const OMX_U32 kPortIndexOutput = 1;
 namespace android {
 
 struct BufferMeta {
-#ifndef METADATA_CAMERA_SOURCE
     explicit BufferMeta(
             const sp<IMemory> &mem, const sp<IHidlMemory> &hidlMemory,
             OMX_U32 portIndex, bool copy, OMX_U8 *backup)
-#else
-    explicit BufferMeta(
-                     const sp<IMemory> &mem, const sp<IHidlMemory> &hidlMemory,
-                     OMX_U32 portIndex, bool is_backup = false)
-#endif
         : mMem(mem),
           mHidlMemory(hidlMemory),
-#ifndef METADATA_CAMERA_SOURCE
           mCopyFromOmx(portIndex == kPortIndexOutput && copy),
           mCopyToOmx(portIndex == kPortIndexInput && copy),
           mPortIndex(portIndex),
           mBackup(backup) {
-#else
-          mIsBackup(is_backup),
-          mPortIndex(portIndex) {
-#endif
     }
 
     explicit BufferMeta(OMX_U32 portIndex) :
-#ifndef METADATA_CAMERA_SOURCE
             mCopyFromOmx(false),
             mCopyToOmx(false),
             mPortIndex(portIndex),
             mBackup(NULL) {
-#else
-            mIsBackup(false),
-            mPortIndex(portIndex) {
-#endif
     }
 
     explicit BufferMeta(const sp<GraphicBuffer> &graphicBuffer, OMX_U32 portIndex)
         : mGraphicBuffer(graphicBuffer),
-#ifndef METADATA_CAMERA_SOURCE
           mCopyFromOmx(false),
           mCopyToOmx(false),
           mPortIndex(portIndex),
           mBackup(NULL) {
-#else
-          mIsBackup(false),
-          mPortIndex(portIndex) {
-#endif
     }
 
     OMX_U8 *getPointer() {
@@ -153,11 +132,7 @@ struct BufferMeta {
     }
 
     void CopyFromOMX(const OMX_BUFFERHEADERTYPE *header) {
-#ifndef METADATA_CAMERA_SOURCE
         if (!mCopyToOmx) {
-#else
-        if (!mIsBackup) {
-#endif
             return;
         }
 
@@ -168,11 +143,7 @@ struct BufferMeta {
     }
 
     void CopyToOMX(const OMX_BUFFERHEADERTYPE *header) {
-#ifndef METADATA_CAMERA_SOURCE
         if (!mCopyToOmx) {
-#else
-        if (!mIsBackup) {
-#endif
             return;
         }
 
@@ -206,26 +177,18 @@ struct BufferMeta {
     OMX_U32 getPortIndex() {
         return mPortIndex;
     }
-#ifndef METADATA_CAMERA_SOURCE
     ~BufferMeta() {
         delete[] mBackup;
     }
-#endif
 private:
     sp<GraphicBuffer> mGraphicBuffer;
     sp<NativeHandle> mNativeHandle;
     sp<IMemory> mMem;
     sp<IHidlMemory> mHidlMemory;
-#ifndef METADATA_CAMERA_SOURCE
-      bool mCopyFromOmx;
-      bool mCopyToOmx;
-#else
-    bool mIsBackup;
-#endif
+    bool mCopyFromOmx;
+    bool mCopyToOmx;
     OMX_U32 mPortIndex;
-#ifndef METADATA_CAMERA_SOURCE
     OMX_U8 *mBackup;
-#endif
 
     BufferMeta(const BufferMeta &);
     BufferMeta &operator=(const BufferMeta &);
@@ -412,7 +375,7 @@ OMXNodeInstance::OMXNodeInstance(
     mGraphicBufferEnabled[0] = false;
     mGraphicBufferEnabled[1] = false;
     mIsSecure = AString(name).endsWith(".secure");
-    mLegacyAdaptiveExperiment = true; //ADebug::isExperimentEnabled("legacy-adaptive");
+    mLegacyAdaptiveExperiment = false; //ADebug::isExperimentEnabled("legacy-adaptive");
 }
 
 OMXNodeInstance::~OMXNodeInstance() {
@@ -756,7 +719,7 @@ status_t OMXNodeInstance::setPortMode(OMX_U32 portIndex, IOMX::PortMode mode) {
             }
         }
         (void)enableNativeBuffers_l(portIndex, OMX_FALSE /*graphic*/, OMX_FALSE);
-        return storeMetaDataInBuffers_l(portIndex, OMX_TRUE, NULL);
+        return storeMetaDataInBuffers_l(portIndex, OMX_FALSE, NULL);
     }
 
     case IOMX::kPortModeDynamicNativeHandle:
@@ -1132,6 +1095,7 @@ status_t OMXNodeInstance::useBuffer(
     }
 #endif
 
+    ALOGD("%s: omxBuffer.mBufferType = %d", __func__, omxBuffer.mBufferType);
     switch (omxBuffer.mBufferType) {
         case OMXBuffer::kBufferTypePreset:
             return useBuffer_l(portIndex, NULL, NULL, buffer);
@@ -1140,6 +1104,7 @@ status_t OMXNodeInstance::useBuffer(
             return useBuffer_l(portIndex, omxBuffer.mMem, NULL, buffer);
 
         case OMXBuffer::kBufferTypeANWBuffer:
+            mMetadataType[portIndex] = kMetadataBufferTypeInvalid;
             return useGraphicBuffer_l(portIndex, omxBuffer.mGraphicBuffer, buffer);
 
         case OMXBuffer::kBufferTypeHidlMemory: {
@@ -1254,12 +1219,12 @@ status_t OMXNodeInstance::useBuffer_l(
             memset(data, 0, allottedSize);
 
             buffer_meta = new BufferMeta(
-                    params, hParams, portIndex);
+                    params, hParams, portIndex, false /* copy */, data);
         } else {
             data = static_cast<OMX_U8 *>(params->pointer());
 
             buffer_meta = new BufferMeta(
-                    params, hParams, portIndex);
+                    params, hParams, portIndex, false /* copy */, NULL);
         }
 
         err = OMX_UseBuffer(
@@ -1267,27 +1232,13 @@ status_t OMXNodeInstance::useBuffer_l(
                 allottedSize, data);
 
         if (err != OMX_ErrorNone) {
+            ALOGE("%s: err = %d", __func__, err);
             CLOG_ERROR(useBuffer, err, SIMPLE_BUFFER(
                     portIndex, (size_t)allottedSize, data));
         }
-#if 0
+#ifndef METADATA_CAMERA_SOURCE
     }
 #endif
-/*#else
-    buffer_meta = new BufferMeta(
-            params, hParams, portIndex);
-
-    ALOGD("%s: before OMX_UseBuffer", __func__);
-    err = OMX_UseBuffer(
-            mHandle, &header, portIndex, buffer_meta,
-            allottedSize, static_cast<OMX_U8 *>(params->pointer()));
-    ALOGD("%s: after OMX_UseBuffer", __func__);
-
-    if (err != OMX_ErrorNone) {
-         CLOG_ERROR(useBuffer, err, SIMPLE_BUFFER(
-                portIndex, (size_t)allottedSize, params->pointer()));
-    }
-#endif*/
 
     if (err != OMX_ErrorNone) {
         delete buffer_meta;
@@ -1373,17 +1324,19 @@ status_t OMXNodeInstance::useGraphicBuffer2_l(
 status_t OMXNodeInstance::useGraphicBuffer_l(
         OMX_U32 portIndex, const sp<GraphicBuffer>& graphicBuffer,
         IOMX::buffer_id *buffer) {
+    ALOGE("%s: portIndex = %d", __func__, portIndex);
     if (graphicBuffer == NULL || buffer == NULL) {
         ALOGE("b/25884056");
         return BAD_VALUE;
     }
-
+//#ifndef STE_HARDWARE
     // First, see if we're in metadata mode. We could be running an experiment to simulate
     // legacy behavior (preallocated buffers) on devices that supports meta.
     if (mMetadataType[portIndex] != kMetadataBufferTypeInvalid) {
         return useGraphicBufferWithMetadata_l(
                 portIndex, graphicBuffer, buffer);
     }
+//#endif
 
     if (!mGraphicBufferEnabled[portIndex]) {
         // Report error if this is not in graphic buffer mode.
@@ -1457,6 +1410,7 @@ status_t OMXNodeInstance::useGraphicBuffer_l(
 status_t OMXNodeInstance::useGraphicBufferWithMetadata_l(
         OMX_U32 portIndex, const sp<GraphicBuffer> &graphicBuffer,
         IOMX::buffer_id *buffer) {
+    ALOGE("%s: portIndex = %d", __func__, portIndex);
     if (portIndex != kPortIndexOutput) {
         return BAD_VALUE;
     }
@@ -1465,11 +1419,12 @@ status_t OMXNodeInstance::useGraphicBufferWithMetadata_l(
             mMetadataType[portIndex] != kMetadataBufferTypeANWBuffer) {
         return BAD_VALUE;
     }
-
+//#ifndef STE_HARDWARE
     status_t err = useBuffer_l(portIndex, NULL, NULL, buffer);
     if (err != OK) {
         return err;
     }
+//#endif
 
     OMX_BUFFERHEADERTYPE *header = findBufferHeader(*buffer, portIndex);
 
