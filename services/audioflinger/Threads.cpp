@@ -1990,7 +1990,7 @@ sp<AudioFlinger::PlaybackThread::Track> AudioFlinger::PlaybackThread::createTrac
     if ((*flags & outputFlags) != *flags) {
         ALOGW("createTrack_l(): mismatch between requested flags (%08x) and output flags (%08x)",
               *flags, outputFlags);
-        *flags = (audio_output_flags_t)(*flags & outputFlags);
+        // *flags = (audio_output_flags_t)(*flags & outputFlags);
     }
 
     // client expresses a preference for FAST, but we get the final say
