@@ -18,6 +18,7 @@ LOCAL_SHARED_LIBRARIES := \
         libresourcemanagerservice \
         liblog \
         libmediaplayerservice \
+        libnativewindow \
         libutils \
         libbinder \
         libicuuc \
