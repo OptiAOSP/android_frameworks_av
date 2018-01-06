@@ -31,8 +31,6 @@
 #include <OMX_Audio.h>
 #include <hardware/gralloc.h>
 #include <nativebase/nativebase.h>
-#include <android/hidl/allocator/1.0/IAllocator.h>
-#include <android/hidl/memory/1.0/IMemory.h>
 
 #define TRACK_BUFFER_TIMING     0
 

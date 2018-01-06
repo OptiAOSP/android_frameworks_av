@@ -123,8 +123,7 @@ cc_library_shared {
     ],
 
     export_shared_lib_headers: [
-        "libmedia",
-        "android.hidl.allocator@1.0",
+        "libmedia"
     ],
 
     export_include_dirs: [
