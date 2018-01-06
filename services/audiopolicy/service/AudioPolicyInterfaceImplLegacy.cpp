@@ -260,7 +260,7 @@ status_t AudioPolicyService::getInputForAttr(const audio_attributes_t *attr,
                                              uid_t uid __unused,
                                              const audio_config_base_t *config,
                                              audio_input_flags_t flags,
-                                             audio_port_handle_t selectedDeviceId,
+                                             audio_port_handle_t *selectedDeviceId,
                                              audio_port_handle_t *portId)
 {
     if (mpAudioPolicy == NULL) {
@@ -278,10 +278,11 @@ status_t AudioPolicyService::getInputForAttr(const audio_attributes_t *attr,
     if (inputSource == AUDIO_SOURCE_DEFAULT) {
         inputSource = AUDIO_SOURCE_MIC;
     }
-
+#if 0
     if ((inputSource == AUDIO_SOURCE_HOTWORD) && !captureHotwordAllowed()) {
         return BAD_VALUE;
     }
+#endif
 
 #ifdef HAVE_PRE_KITKAT_AUDIO_POLICY_BLOB
     if (inputSource == AUDIO_SOURCE_HOTWORD)
@@ -606,7 +607,7 @@ status_t AudioPolicyService::getOutputForAttr(const audio_attributes_t *attr,
                                               uid_t uid __unused,
 					      const audio_config_t *config,
                                               audio_output_flags_t flags,
-                                              audio_port_handle_t selectedDeviceId,
+                                              audio_port_handle_t *selectedDeviceId,
                                               audio_port_handle_t *portId)
 {
     if (attr != NULL) {
@@ -660,6 +661,18 @@ status_t AudioPolicyService::setMasterMono(bool mono)
 }
 
 status_t AudioPolicyService::getMasterMono(bool *mono)
+{
+    return INVALID_OPERATION;
+}
+
+float AudioPolicyService::getStreamVolumeDB(
+            audio_stream_type_t stream, int index, audio_devices_t device)
+{
+    return INVALID_OPERATION;
+}
+
+status_t AudioPolicyService::listAudioSessions(audio_stream_type_t streams,
+                                               Vector< sp<AudioSessionInfo>> &sessions)
 {
     return INVALID_OPERATION;
 }
