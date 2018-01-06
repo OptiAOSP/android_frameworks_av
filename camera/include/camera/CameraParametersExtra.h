@@ -1,6 +1,3 @@
-// Overload this file in your device specific config if you need
-// to add extra camera parameters.
-// A typical file would look like this:
 /*
  * Copyright (C) 2014 The CyanogenMod Project
  *
@@ -16,20 +13,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/*
+
+#include "camera/CameraParametersExtraDurationTimer.h"
+
 #define CAMERA_PARAMETERS_EXTRA_C \
-const char CameraParameters::KEY_SUPPORTED_BURST_NUM[] = "supported-burst-num"; \
-const char CameraParameters::KEY_BURST_NUM[] = "burst-num"; \
-const char CameraParameters::KEY_SUPPORTED_HDR_MODES[] = "supported-hdr-modes"; \
-const char CameraParameters::KEY_HDR_MODE[] = "hdr-mode"; \
-const char CameraParameters::HDR_MODE_OFF[] = "hdr-mode-off"; \
-const char CameraParameters::HDR_MODE_HDR[] = "hdr-mode-hdr";
+const char CameraParameters::SCENE_MODE_AQUA[] = "aqua"; \
+const char CameraParameters::SCENE_MODE_BACKLIGHT[] = "backlight"; \
+const char CameraParameters::SCENE_MODE_DUSKDAWN[] = "duskdawn"; \
+const char CameraParameters::SCENE_MODE_FALLCOLOR[] = "fallcolor"; \
+const char CameraParameters::SCENE_MODE_TEXT[] = "text"; \
+const char CameraParameters::PIXEL_FORMAT_YUV420SPNV12[] = "yuv420spnv12"; \
+const char CameraParameters::PIXEL_FORMAT_YUV420MB[] = "yuv420mb"; \
+const char CameraParameters::PIXEL_FORMAT_YVU422SP[] = "yvu422sp"; \
+const char CameraParameters::PIXEL_FORMAT_YVU422P[] = "yvu422p"; \
+const char CameraParameters::PIXEL_FORMAT_YVU420SP[] = "yvu420sp"; \
+const char CameraParameters::PIXEL_FORMAT_YVU420P[]  = "yvu420p"; \
+const char CameraParameters::KEY_RECORD_STRIDE[] = "record-stride"; \
+const char CameraParameters::KEY_RECORD_SLICE_HEIGHT[] = "record-slice-height"; \
+CAMERA_PARAMETERS_EXTRA_C_DURATION_TIMER \
 
 #define CAMERA_PARAMETERS_EXTRA_H \
-    static const char KEY_SUPPORTED_BURST_NUM[]; \
-    static const char KEY_BURST_NUM[]; \
-    static const char KEY_SUPPORTED_HDR_MODES[]; \
-    static const char KEY_HDR_MODE[]; \
-    static const char HDR_MODE_OFF[]; \
-    static const char HDR_MODE_HDR[];
-*/
+    static const char SCENE_MODE_AQUA[]; \
+    static const char SCENE_MODE_BACKLIGHT[]; \
+    static const char SCENE_MODE_DUSKDAWN[]; \
+    static const char SCENE_MODE_FALLCOLOR[]; \
+    static const char SCENE_MODE_TEXT[]; \
+    static const char PIXEL_FORMAT_YUV420SPNV12[]; \
+    static const char PIXEL_FORMAT_YVU422SP[]; \
+    static const char PIXEL_FORMAT_YVU422P[];  \
+    static const char PIXEL_FORMAT_YVU420SP[]; \
+    static const char PIXEL_FORMAT_YVU420P[]; \
+    static const char PIXEL_FORMAT_YUV420MB[]; \
+    static const char KEY_RECORD_STRIDE[]; \
+    static const char KEY_RECORD_SLICE_HEIGHT[];
