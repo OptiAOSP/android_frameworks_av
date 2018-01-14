@@ -416,7 +416,7 @@ DataspaceFlags Camera3Device::mapToHidlDataspace(
 }
 
 BufferUsageFlags Camera3Device::mapToConsumerUsage(
-        uint64_t usage) {
+        uint32_t usage) {
     return usage;
 }
 
@@ -474,12 +474,7 @@ android_dataspace Camera3Device::mapToFrameworkDataspace(
     return static_cast<android_dataspace>(dataSpace);
 }
 
-uint64_t Camera3Device::mapConsumerToFrameworkUsage(
-        BufferUsageFlags usage) {
-    return usage;
-}
-
-uint64_t Camera3Device::mapProducerToFrameworkUsage(
+uint32_t Camera3Device::mapProducerToFrameworkUsage(
         BufferUsageFlags usage) {
     return usage;
 }
@@ -1222,7 +1217,7 @@ status_t Camera3Device::createInputStream(
 status_t Camera3Device::createStream(sp<Surface> consumer,
             uint32_t width, uint32_t height, int format,
             android_dataspace dataSpace, camera3_stream_rotation_t rotation, int *id,
-            int streamSetId, bool isShared, uint64_t consumerUsage) {
+            int streamSetId, bool isShared, uint32_t consumerUsage) {
     ATRACE_CALL();
 
     if (consumer == nullptr) {
@@ -1240,13 +1235,13 @@ status_t Camera3Device::createStream(sp<Surface> consumer,
 status_t Camera3Device::createStream(const std::vector<sp<Surface>>& consumers,
         bool hasDeferredConsumer, uint32_t width, uint32_t height, int format,
         android_dataspace dataSpace, camera3_stream_rotation_t rotation, int *id,
-        int streamSetId, bool isShared, uint64_t consumerUsage) {
+        int streamSetId, bool isShared, uint32_t consumerUsage) {
     ATRACE_CALL();
     Mutex::Autolock il(mInterfaceLock);
     nsecs_t maxExpectedDuration = getExpectedInFlightDuration();
     Mutex::Autolock l(mLock);
     ALOGV("Camera %s: Creating new stream %d: %d x %d, format %d, dataspace %d rotation %d"
-            " consumer usage %" PRIu64 ", isShared %d", mId.string(), mNextStreamId, width, height, format,
+            " consumer usage 0x%x, isShared %d", mId.string(), mNextStreamId, width, height, format,
             dataSpace, rotation, consumerUsage, isShared);
 
     status_t res;
@@ -3182,7 +3177,7 @@ status_t Camera3Device::HalInterface::configureStreams(camera3_stream_configurat
         dst.width = src->width;
         dst.height = src->height;
         dst.format = mapToPixelFormat(src->format);
-        dst.usage = mapToConsumerUsage(cam3stream->getUsage());
+        dst.usage = mapToConsumerUsage(src->usage);
         dst.dataSpace = mapToHidlDataspace(src->data_space);
         dst.rotation = mapToStreamRotation((camera3_stream_rotation_t) src->rotation);
 
@@ -3316,8 +3311,7 @@ status_t Camera3Device::HalInterface::configureStreams(camera3_stream_configurat
                         __FUNCTION__, streamId);
                 return INVALID_OPERATION;
             }
-            dstStream->setUsage(
-                    mapConsumerToFrameworkUsage(src.v3_2.consumerUsage));
+            dstStream->setUsage(src.v3_2.consumerUsage);
         } else {
             // OUTPUT
             if (src.v3_2.consumerUsage != 0) {

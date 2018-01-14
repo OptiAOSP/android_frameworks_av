@@ -382,7 +382,7 @@ CameraHardwareInterface::setUsage(hardware::graphics::common::V1_0::BufferUsage 
         ALOGE("%s: preview window is null", __FUNCTION__);
         return s;
     }
-    mPreviewUsage = static_cast<uint64_t> (usage);
+    mPreviewUsage = (int) usage;
     int rc = native_window_set_usage(a, mPreviewUsage);
     if (rc == OK) {
         cleanupCirculatingBuffers();

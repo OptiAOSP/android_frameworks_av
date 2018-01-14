@@ -118,12 +118,12 @@ class Camera3Device :
             uint32_t width, uint32_t height, int format,
             android_dataspace dataSpace, camera3_stream_rotation_t rotation, int *id,
             int streamSetId = camera3::CAMERA3_STREAM_SET_ID_INVALID,
-            bool isShared = false, uint64_t consumerUsage = 0) override;
+            bool isShared = false, uint32_t consumerUsage = 0) override;
     status_t createStream(const std::vector<sp<Surface>>& consumers,
             bool hasDeferredConsumer, uint32_t width, uint32_t height, int format,
             android_dataspace dataSpace, camera3_stream_rotation_t rotation, int *id,
             int streamSetId = camera3::CAMERA3_STREAM_SET_ID_INVALID,
-            bool isShared = false, uint64_t consumerUsage = 0) override;
+            bool isShared = false, uint32_t consumerUsage = 0) override;
 
     status_t createInputStream(
             uint32_t width, uint32_t height, int format,
@@ -588,7 +588,7 @@ class Camera3Device :
     static hardware::graphics::common::V1_0::PixelFormat mapToPixelFormat(int frameworkFormat);
     static hardware::camera::device::V3_2::DataspaceFlags mapToHidlDataspace(
             android_dataspace dataSpace);
-    static hardware::camera::device::V3_2::BufferUsageFlags mapToConsumerUsage(uint64_t usage);
+    static hardware::camera::device::V3_2::BufferUsageFlags mapToConsumerUsage(uint32_t usage);
     static hardware::camera::device::V3_2::StreamRotation mapToStreamRotation(
             camera3_stream_rotation_t rotation);
     // Returns a negative error code if the passed-in operation mode is not valid.
@@ -598,9 +598,7 @@ class Camera3Device :
     static int mapToFrameworkFormat(hardware::graphics::common::V1_0::PixelFormat pixelFormat);
     static android_dataspace mapToFrameworkDataspace(
             hardware::camera::device::V3_2::DataspaceFlags);
-    static uint64_t mapConsumerToFrameworkUsage(
-            hardware::camera::device::V3_2::BufferUsageFlags usage);
-    static uint64_t mapProducerToFrameworkUsage(
+    static uint32_t mapProducerToFrameworkUsage(
             hardware::camera::device::V3_2::BufferUsageFlags usage);
 
     struct RequestTrigger {

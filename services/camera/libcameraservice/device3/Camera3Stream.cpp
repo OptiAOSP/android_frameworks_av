@@ -106,11 +106,11 @@ android_dataspace Camera3Stream::getDataSpace() const {
     return camera3_stream::data_space;
 }
 
-uint64_t Camera3Stream::getUsage() const {
+uint32_t Camera3Stream::getUsage() const {
     return mUsage;
 }
 
-void Camera3Stream::setUsage(uint64_t usage) {
+void Camera3Stream::setUsage(uint32_t usage) {
     mUsage = usage;
 }
 
