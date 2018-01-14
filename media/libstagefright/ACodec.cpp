@@ -6444,6 +6444,14 @@ bool ACodec::UninitializedState::onAllocateComponent(const sp<AMessage> &msg) {
             ++matchIndex) {
         componentName = matchingCodecs[matchIndex];
 
+        OMXClient client;
+        bool trebleFlag;
+        if (client.connect(owners[matchIndex].c_str(), &trebleFlag) != OK) {
+            mCodec->signalError(OMX_ErrorUndefined, NO_INIT);
+            return false;
+        }
+        omx = client.interface();
+
         pid_t tid = gettid();
         int prevPriority = androidGetThreadPriority(tid);
         androidSetThreadPriority(tid, ANDROID_PRIORITY_FOREGROUND);
@@ -6451,6 +6459,7 @@ bool ACodec::UninitializedState::onAllocateComponent(const sp<AMessage> &msg) {
         androidSetThreadPriority(tid, prevPriority);
 
         if (err == OK) {
+            mCodec->setTrebleFlag(trebleFlag);
             break;
         } else {
             ALOGW("Allocating component '%s' failed, try next one.", componentName.c_str());
