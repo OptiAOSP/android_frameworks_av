@@ -67,6 +67,7 @@ cc_library_shared {
     cflags: [
         "-Werror",
         "-Wall",
+        "-DHAVE_PRE_KITKAT_AUDIO_BLOB",
     ],
 
     include_dirs: ["system/media/audio_utils/include"],
