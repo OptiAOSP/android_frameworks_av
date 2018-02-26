@@ -44,12 +44,15 @@ static status_t load_audio_interface(const char *if_name, audio_hw_device_t **de
                 AUDIO_HARDWARE_MODULE_ID, if_name, strerror(-rc));
         goto out;
     }
+#ifndef MR0_AUDIO_BLOB
     if ((*dev)->common.version < AUDIO_DEVICE_API_VERSION_MIN) {
         ALOGE("%s wrong audio hw device version %04x", __func__, (*dev)->common.version);
         rc = BAD_VALUE;
         audio_hw_device_close(*dev);
         goto out;
     }
+#endif
+
     return OK;
 
 out:

@@ -1756,6 +1756,7 @@ audio_module_handle_t AudioFlinger::loadHwModule_l(const char *name)
     {  // scope for auto-lock pattern
         AutoMutex lock(mHardwareLock);
 
+#ifndef MR0_AUDIO_BLOB
         if (0 == mAudioHwDevs.size()) {
             mHardwareStatus = AUDIO_HW_GET_MASTER_VOLUME;
             float mv;
@@ -1769,6 +1770,7 @@ audio_module_handle_t AudioFlinger::loadHwModule_l(const char *name)
                 mMasterMute = mm;
             }
         }
+#endif
 
         mHardwareStatus = AUDIO_HW_SET_MASTER_VOLUME;
         if (OK == dev->setMasterVolume(mMasterVolume)) {
@@ -1776,11 +1778,13 @@ audio_module_handle_t AudioFlinger::loadHwModule_l(const char *name)
                     AudioHwDevice::AHWD_CAN_SET_MASTER_VOLUME);
         }
 
+#ifndef MR0_AUDIO_BLOB
         mHardwareStatus = AUDIO_HW_SET_MASTER_MUTE;
         if (OK == dev->setMasterMute(mMasterMute)) {
             flags = static_cast<AudioHwDevice::Flags>(flags |
                     AudioHwDevice::AHWD_CAN_SET_MASTER_MUTE);
         }
+#endif
 
         mHardwareStatus = AUDIO_HW_IDLE;
     }
@@ -2040,7 +2044,12 @@ status_t AudioFlinger::openOutput(audio_module_handle_t module,
             playbackThread->ioConfigChanged(AUDIO_OUTPUT_OPENED);
 
             // the first primary output opened designates the primary hw device
+#ifdef STE_HARDWARE
+            if (mPrimaryHardwareDev == NULL) {
+#else
             if ((mPrimaryHardwareDev == NULL) && (flags & AUDIO_OUTPUT_FLAG_PRIMARY)) {
+#endif
+
                 ALOGI("Using module %d as the primary audio interface", module);
                 mPrimaryHardwareDev = playbackThread->getOutput()->audioHwDev;
 
