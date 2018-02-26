@@ -576,7 +576,7 @@ ACodec::ACodec()
 
     changeState(mUninitializedState);
 
-    mTrebleFlag = false;
+    mTrebleFlag = bool(property_get_bool("debug.treble_omx", false));
 }
 
 ACodec::~ACodec() {
