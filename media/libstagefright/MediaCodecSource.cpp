@@ -999,6 +999,12 @@ void MediaCodecSource::onMessageReceived(const sp<AMessage> &msg) {
             // if we already reached EOS, reply and return now
             ALOGI("encoder (%s) already stopped",
                     mIsVideo ? "video" : "audio");
+
+            // There maybe media buffers in the queue, should return back.
+            // Or the AudioSource will block on waitOutstandingEncodingFrames_l()
+            if (!(mFlags & FLAG_USE_SURFACE_INPUT))
+                mPuller->stop();
+
             (new AMessage)->postReply(replyID);
             break;
         }
