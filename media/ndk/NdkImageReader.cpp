@@ -149,7 +149,9 @@ AImageReader::BufferRemovedListener::onBufferFreed(const wp<GraphicBuffer>& grap
     msg->setPointer(
         AImageReader::kCallbackFpKey, (void*) mListener.onBufferRemoved);
     msg->setPointer(AImageReader::kContextKey, mListener.context);
+#ifndef STE_HARDWARE
     msg->setObject(AImageReader::kGraphicBufferKey, gBuffer);
+#endif
     msg->post();
 }
 
