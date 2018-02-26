@@ -84,6 +84,9 @@ cc_library_shared {
             uses_qcom_bsp_legacy: {
                 cppflags: ["-DQCOM_BSP_LEGACY"],
             },
+            has_legacy_camera_hal1: {
+                cflags: ["-DCAMCORDER_GRALLOC_SOURCE"],
+            },
         },
     },
 
