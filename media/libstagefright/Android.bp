@@ -136,7 +136,6 @@ cc_library_shared {
 
     cflags: [
         "-Wno-multichar",
-        "-Werror",
         "-Wno-error=deprecated-declarations",
         "-Wall",
     ],
