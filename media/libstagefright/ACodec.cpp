@@ -1142,7 +1142,6 @@ status_t ACodec::setupNativeWindowSizeFormatAndUsage(
 status_t ACodec::configureOutputBuffersFromNativeWindow(
         OMX_U32 *bufferCount, OMX_U32 *bufferSize,
         OMX_U32 *minUndequeuedBuffers, bool preregister) {
-
     OMX_PARAM_PORTDEFINITIONTYPE def;
     InitOMXParams(&def);
     def.nPortIndex = kPortIndexOutput;
@@ -1246,9 +1245,11 @@ status_t ACodec::configureOutputBuffersFromNativeWindow(
 }
 
 status_t ACodec::allocateOutputBuffersFromNativeWindow() {
+#ifndef STE_HARDWARE
     // This method only handles the non-metadata mode (or simulating legacy
     // mode with metadata, which is transparent to ACodec).
     CHECK(!storingMetadataInDecodedBuffers());
+#endif
 
     OMX_U32 bufferCount, bufferSize, minUndequeuedBuffers;
     status_t err = configureOutputBuffersFromNativeWindow(
@@ -1257,8 +1258,14 @@ status_t ACodec::allocateOutputBuffersFromNativeWindow() {
         return err;
     mNumUndequeuedBuffers = minUndequeuedBuffers;
 
-    static_cast<Surface*>(mNativeWindow.get())
-            ->getIGraphicBufferProducer()->allowAllocation(true);
+#ifdef STE_HARDWARE
+    if (!storingMetadataInDecodedBuffers()) {
+#endif
+        static_cast<Surface*>(mNativeWindow.get())
+                ->getIGraphicBufferProducer()->allowAllocation(true);
+#ifdef STE_HARDWARE
+    }
+#endif
 
     ALOGV("[%s] Allocating %u buffers from a native window of size %u on "
          "output port",
@@ -1330,15 +1337,22 @@ status_t ACodec::allocateOutputBuffersFromNativeWindow() {
         }
     }
 
-    static_cast<Surface*>(mNativeWindow.get())
-            ->getIGraphicBufferProducer()->allowAllocation(false);
+#ifdef STE_HARDWARE
+    if (!storingMetadataInDecodedBuffers()) {
+#endif
+        static_cast<Surface*>(mNativeWindow.get())
+                ->getIGraphicBufferProducer()->allowAllocation(false);
+#ifdef STE_HARDWARE
+    }
+#endif
 
     return err;
 }
 
 status_t ACodec::allocateOutputMetadataBuffers() {
+#ifndef STE_HARDWARE
     CHECK(storingMetadataInDecodedBuffers());
-
+#endif
     OMX_U32 bufferCount, bufferSize, minUndequeuedBuffers;
     status_t err = configureOutputBuffersFromNativeWindow(
             &bufferCount, &bufferSize, &minUndequeuedBuffers,
