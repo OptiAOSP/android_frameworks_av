@@ -69,7 +69,7 @@ void Camera3IOStreamBase::dump(int fd, const Vector<String16> &args) const {
     (void) args;
     String8 lines;
 
-    uint64_t consumerUsage = 0;
+    uint32_t consumerUsage = 0;
     status_t res = getEndpointUsage(&consumerUsage);
     if (res != OK) consumerUsage = 0;
 
@@ -78,7 +78,7 @@ void Camera3IOStreamBase::dump(int fd, const Vector<String16> &args) const {
             camera3_stream::width, camera3_stream::height,
             camera3_stream::format, camera3_stream::data_space);
     lines.appendFormat("      Max size: %zu\n", mMaxSize);
-    lines.appendFormat("      Combined usage: %" PRIu64 ", max HAL buffers: %d\n",
+    lines.appendFormat("      Combined usage: %d, max HAL buffers: %d\n",
             mUsage | consumerUsage, camera3_stream::max_buffers);
     lines.appendFormat("      Frames produced: %d, last timestamp: %" PRId64 " ns\n",
             mFrameCount, mLastTimestamp);

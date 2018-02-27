@@ -92,7 +92,7 @@ Camera3OutputStream::Camera3OutputStream(int id,
 
 Camera3OutputStream::Camera3OutputStream(int id,
         uint32_t width, uint32_t height, int format,
-        uint64_t consumerUsage, android_dataspace dataSpace,
+        uint32_t consumerUsage, android_dataspace dataSpace,
         camera3_stream_rotation_t rotation, nsecs_t timestampOffset, int setId) :
         Camera3IOStreamBase(id, CAMERA3_STREAM_OUTPUT, width, height,
                             /*maxSize*/0, format, dataSpace, rotation, setId),
@@ -114,8 +114,7 @@ Camera3OutputStream::Camera3OutputStream(int id,
     // Sanity check for the consumer usage flag.
     if ((consumerUsage & GraphicBuffer::USAGE_HW_TEXTURE) == 0 &&
             (consumerUsage & GraphicBuffer::USAGE_HW_COMPOSER) == 0) {
-        ALOGE("%s: Deferred consumer usage flag is illegal %" PRIu64 "!",
-              __FUNCTION__, consumerUsage);
+        ALOGE("%s: Deferred consumer usage flag is illegal (0x%x)!", __FUNCTION__, consumerUsage);
         mState = STATE_ERROR;
     }
 
@@ -131,7 +130,7 @@ Camera3OutputStream::Camera3OutputStream(int id, camera3_stream_type_t type,
                                          int format,
                                          android_dataspace dataSpace,
                                          camera3_stream_rotation_t rotation,
-                                         uint64_t consumerUsage, nsecs_t timestampOffset,
+                                         uint32_t consumerUsage, nsecs_t timestampOffset,
                                          int setId) :
         Camera3IOStreamBase(id, type, width, height,
                             /*maxSize*/0,
@@ -377,7 +376,7 @@ status_t Camera3OutputStream::configureConsumerQueueLocked() {
 
     res = native_window_set_usage(mConsumer.get(), mUsage);
     if (res != OK) {
-        ALOGE("%s: Unable to configure usage %" PRIu64 " for stream %d",
+        ALOGE("%s: Unable to configure usage %08x for stream %d",
                 __FUNCTION__, mUsage, mId);
         return res;
     }
@@ -471,7 +470,7 @@ status_t Camera3OutputStream::configureConsumerQueueLocked() {
      * HAL3.2 devices may not support the dynamic buffer registeration.
      */
     if (mBufferManager != 0 && mSetId > CAMERA3_STREAM_SET_ID_INVALID) {
-        uint64_t consumerUsage = 0;
+        uint32_t consumerUsage = 0;
         getEndpointUsage(&consumerUsage);
         StreamInfo streamInfo(
                 getId(), getStreamSetId(), getWidth(), getHeight(), getFormat(), getDataSpace(),
@@ -638,7 +637,7 @@ status_t Camera3OutputStream::disconnectLocked() {
     return OK;
 }
 
-status_t Camera3OutputStream::getEndpointUsage(uint64_t *usage) const {
+status_t Camera3OutputStream::getEndpointUsage(uint32_t *usage) const {
 
     status_t res;
 
@@ -653,12 +652,14 @@ status_t Camera3OutputStream::getEndpointUsage(uint64_t *usage) const {
     return res;
 }
 
-status_t Camera3OutputStream::getEndpointUsageForSurface(uint64_t *usage,
+status_t Camera3OutputStream::getEndpointUsageForSurface(uint32_t *usage,
         const sp<Surface>& surface) const {
     status_t res;
-    uint64_t u = 0;
+    int32_t u = 0;
 
-    res = native_window_get_consumer_usage(static_cast<ANativeWindow*>(surface.get()), &u);
+    res = static_cast<ANativeWindow*>(surface.get())->query(surface.get(),
+            NATIVE_WINDOW_CONSUMER_USAGE_BITS, &u);
+
     // If an opaque output stream's endpoint is ImageReader, add
     // GRALLOC_USAGE_HW_CAMERA_ZSL to the usage so HAL knows it will be used
     // for the ZSL use case.
@@ -678,7 +679,7 @@ status_t Camera3OutputStream::getEndpointUsageForSurface(uint64_t *usage,
 }
 
 bool Camera3OutputStream::isVideoStream() const {
-    uint64_t usage = 0;
+    uint32_t usage = 0;
     status_t res = getEndpointUsage(&usage);
     if (res != OK) {
         ALOGE("%s: getting end point usage failed: %s (%d).", __FUNCTION__, strerror(-res), res);
@@ -827,7 +828,7 @@ status_t Camera3OutputStream::setConsumers(const std::vector<sp<Surface>>& consu
 }
 
 bool Camera3OutputStream::isConsumedByHWComposer() const {
-    uint64_t usage = 0;
+    uint32_t usage = 0;
     status_t res = getEndpointUsage(&usage);
     if (res != OK) {
         ALOGE("%s: getting end point usage failed: %s (%d).", __FUNCTION__, strerror(-res), res);
@@ -838,7 +839,7 @@ bool Camera3OutputStream::isConsumedByHWComposer() const {
 }
 
 bool Camera3OutputStream::isConsumedByHWTexture() const {
-    uint64_t usage = 0;
+    uint32_t usage = 0;
     status_t res = getEndpointUsage(&usage);
     if (res != OK) {
         ALOGE("%s: getting end point usage failed: %s (%d).", __FUNCTION__, strerror(-res), res);

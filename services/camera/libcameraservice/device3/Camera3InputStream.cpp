@@ -284,7 +284,7 @@ status_t Camera3InputStream::configureQueueLocked() {
     return OK;
 }
 
-status_t Camera3InputStream::getEndpointUsage(uint64_t *usage) const {
+status_t Camera3InputStream::getEndpointUsage(uint32_t *usage) const {
     // Per HAL3 spec, input streams have 0 for their initial usage field.
     *usage = 0;
     return OK;

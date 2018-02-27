@@ -44,7 +44,7 @@ struct StreamInfo {
     uint32_t height;
     uint32_t format;
     android_dataspace dataSpace;
-    uint64_t combinedUsage;
+    uint32_t combinedUsage;
     size_t totalBufferCount;
     bool isConfigured;
     explicit StreamInfo(int id = CAMERA3_STREAM_ID_INVALID,
@@ -53,7 +53,7 @@ struct StreamInfo {
             uint32_t h = 0,
             uint32_t fmt = 0,
             android_dataspace ds = HAL_DATASPACE_UNKNOWN,
-            uint64_t usage = 0,
+            uint32_t usage = 0,
             size_t bufferCount = 0,
             bool configured = false) :
                 streamId(id),
@@ -101,7 +101,7 @@ class Camera3OutputStream :
      * stream set id needs to be set to support buffer sharing between multiple streams.
      */
     Camera3OutputStream(int id, uint32_t width, uint32_t height, int format,
-            uint64_t consumerUsage, android_dataspace dataSpace,
+            uint32_t consumerUsage, android_dataspace dataSpace,
             camera3_stream_rotation_t rotation, nsecs_t timestampOffset,
             int setId = CAMERA3_STREAM_SET_ID_INVALID);
 
@@ -181,7 +181,7 @@ class Camera3OutputStream :
     Camera3OutputStream(int id, camera3_stream_type_t type,
             uint32_t width, uint32_t height, int format,
             android_dataspace dataSpace, camera3_stream_rotation_t rotation,
-            uint64_t consumerUsage = 0, nsecs_t timestampOffset = 0,
+            uint32_t consumerUsage = 0, nsecs_t timestampOffset = 0,
             int setId = CAMERA3_STREAM_SET_ID_INVALID);
 
     /**
@@ -196,14 +196,14 @@ class Camera3OutputStream :
 
     virtual status_t disconnectLocked();
 
-    status_t getEndpointUsageForSurface(uint64_t *usage,
+    status_t getEndpointUsageForSurface(uint32_t *usage,
             const sp<Surface>& surface) const;
     status_t configureConsumerQueueLocked();
 
     // Consumer as the output of camera HAL
     sp<Surface> mConsumer;
 
-    uint64_t getPresetConsumerUsage() const { return mConsumerUsage; }
+    uint32_t getPresetConsumerUsage() const { return mConsumerUsage; }
 
     static const nsecs_t       kDequeueBufferTimeout   = 1000000000; // 1 sec
 
@@ -250,7 +250,7 @@ class Camera3OutputStream :
      * Consumer end point usage flag set by the constructor for the deferred
      * consumer case.
      */
-    uint64_t    mConsumerUsage;
+    uint32_t    mConsumerUsage;
 
     // Whether to drop valid buffers.
     bool mDropBuffers;
@@ -270,7 +270,7 @@ class Camera3OutputStream :
 
     virtual status_t configureQueueLocked();
 
-    virtual status_t getEndpointUsage(uint64_t *usage) const;
+    virtual status_t getEndpointUsage(uint32_t *usage) const;
 
     /**
      * Private methods
