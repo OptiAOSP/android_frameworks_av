@@ -975,6 +975,10 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
                         err = mOMXNode->useBuffer(
                                 portIndex, hidlMemToken, &info.mBufferID);
                     } else {
+			if (bufSize == 8) {
+				ALOGE("%s: wrong buffer size 8", __func__);
+				//continue;
+			}
                         mem = mDealer[portIndex]->allocate(bufSize);
                         if (mem == NULL || mem->pointer() == NULL) {
                             return NO_MEMORY;
@@ -1003,7 +1007,7 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
 
                     // if we require conversion, allocate conversion buffer for client use;
                     // otherwise, reuse codec buffer
-                    if (mConverter[portIndex] != NULL) {
+                    if ((mConverter[portIndex] != NULL) && conversionBufferSize != 8) {
                         CHECK_GT(conversionBufferSize, (size_t)0);
                         if (getTrebleFlag()) {
                             bool success;
@@ -1034,6 +1038,7 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
                             info.mMemRef = mem;
                         }
                     } else {
+			ALOGE("%s: conversionBufferSize = 8", __func__);
                         info.mData = info.mCodecData;
                         info.mMemRef = info.mCodecRef;
                     }
