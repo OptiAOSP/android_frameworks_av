@@ -857,22 +857,24 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
         if (err == OK) {
             const IOMX::PortMode &mode = mPortMode[portIndex];
             size_t bufSize = def.nBufferSize;
-#ifndef METADATA_CAMERA_SOURCE
+            ALOGE("%s: def.nBufferSize = %d", __func__, def.nBufferSize);
             // Always allocate VideoNativeMetadata if using ANWBuffer.
             // OMX might use gralloc source internally, but we don't share
             // metadata buffer with OMX, OMX has its own headers.
             if (mode == IOMX::kPortModeDynamicANWBuffer) {
-#else
-            if (mode == IOMX::kPortModeDynamicANWBuffer) {
-                bufSize = sizeof(VideoGrallocMetadata);
-            } else if (mode == IOMX::kPortModeDynamicANWBuffer) {
-#endif
                 bufSize = sizeof(VideoNativeMetadata);
 #ifndef METADATA_CAMERA_SOURCE
             } else if (mode == IOMX::kPortModeDynamicNativeHandle) {
                 bufSize = sizeof(VideoNativeHandleMetadata);
 #endif
             }
+
+            if (portIndex == kPortIndexInput) {
+                bufSize = max(sizeof(VideoGrallocMetadata), sizeof(VideoNativeMetadata));
+                bufSize = max(bufSize, def.nBufferSize);
+            }
+
+            ALOGE("%s: portIndex = %d, bufSize = %d", __func__, portIndex, bufSize);
 
             size_t conversionBufferSize = 0;
 
@@ -886,9 +888,11 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
                 }
             }
 
+            ALOGE("%s: conversionBufferSize = %d", __func__, conversionBufferSize);
+
             size_t alignment = MemoryDealer::getAllocationAlignment();
 
-            ALOGV("[%s] Allocating %u buffers of size %zu (from %u using %s) on %s port",
+            ALOGE("[%s] Allocating %u buffers of size %zu (from %u using %s) on %s port",
                     mComponentName.c_str(),
                     def.nBufferCountActual, bufSize, def.nBufferSize, asString(mode),
                     portIndex == kPortIndexInput ? "input" : "output");
@@ -907,26 +911,14 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
                 return NO_MEMORY;
             }
 
-            if (mode != IOMX::kPortModePresetSecureBuffer) {
-                if (getTrebleFlag()) {
-                    mAllocator[portIndex] = TAllocator::getService("ashmem");
-                    if (mAllocator[portIndex] == nullptr) {
-                        ALOGE("hidl allocator on port %d is null",
-                                (int)portIndex);
-                        return NO_MEMORY;
-                    }
-                } else {
-                    size_t totalSize = def.nBufferCountActual *
-                            (alignedSize + alignedConvSize);
-                    mDealer[portIndex] = new MemoryDealer(totalSize, "ACodec");
-                }
-            }
+            size_t totalSize = def.nBufferCountActual *
+                    (alignedSize + alignedConvSize);
+            mDealer[portIndex] = new MemoryDealer(totalSize, "ACodec");
+            ALOGE("%s: totalSize = %d", __func__, totalSize);
 
             const sp<AMessage> &format =
                     portIndex == kPortIndexInput ? mInputFormat : mOutputFormat;
             for (OMX_U32 i = 0; i < def.nBufferCountActual && err == OK; ++i) {
-                hidl_memory hidlMemToken;
-                sp<TMemory> hidlMem;
                 sp<IMemory> mem;
 
                 BufferInfo info;
@@ -936,115 +928,39 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
                 info.mGraphicBuffer = NULL;
                 info.mNewGraphicBuffer = false;
 
-                if (mode == IOMX::kPortModePresetSecureBuffer) {
-                    void *ptr = NULL;
-                    sp<NativeHandle> native_handle;
-                    err = mOMXNode->allocateSecureBuffer(
-                            portIndex, bufSize, &info.mBufferID,
-                            &ptr, &native_handle);
-
-                    info.mData = (native_handle == NULL)
-                            ? new SecureBuffer(format, ptr, bufSize)
-                            : new SecureBuffer(format, native_handle, bufSize);
-                    info.mCodecData = info.mData;
-                } else {
-                    if (getTrebleFlag()) {
-                        bool success;
-                        auto transStatus = mAllocator[portIndex]->allocate(
-                                bufSize,
-                                [&success, &hidlMemToken](
-                                        bool s,
-                                        hidl_memory const& m) {
-                                    success = s;
-                                    hidlMemToken = m;
-                                });
-
-                        if (!transStatus.isOk()) {
-                            ALOGE("hidl's AshmemAllocator failed at the "
-                                    "transport: %s",
-                                    transStatus.description().c_str());
-                            return NO_MEMORY;
-                        }
-                        if (!success) {
-                            return NO_MEMORY;
-                        }
-                        hidlMem = mapMemory(hidlMemToken);
-                        if (hidlMem == nullptr) {
-                            return NO_MEMORY;
-                        }
-                        err = mOMXNode->useBuffer(
-                                portIndex, hidlMemToken, &info.mBufferID);
-                    } else {
-			if (bufSize == 8) {
-				ALOGE("%s: wrong buffer size 8", __func__);
-				//continue;
-			}
-                        mem = mDealer[portIndex]->allocate(bufSize);
-                        if (mem == NULL || mem->pointer() == NULL) {
-                            return NO_MEMORY;
-                        }
-
-                        err = mOMXNode->useBuffer(
-                                portIndex, mem, &info.mBufferID);
-                    }
-
-                    if (mode == IOMX::kPortModeDynamicANWBuffer) {
-                        VideoNativeMetadata* metaData = (VideoNativeMetadata*)(
-                                getTrebleFlag() ?
-                                (void*)hidlMem->getPointer() : mem->pointer());
-                        metaData->nFenceFd = -1;
-                    }
-
-                    if (getTrebleFlag()) {
-                        info.mCodecData = new SharedMemoryBuffer(
-                                format, hidlMem);
-                        info.mCodecRef = hidlMem;
-                    } else {
-                        info.mCodecData = new SharedMemoryBuffer(
-                                format, mem);
-                        info.mCodecRef = mem;
-                    }
-
-                    // if we require conversion, allocate conversion buffer for client use;
-                    // otherwise, reuse codec buffer
-                    if ((mConverter[portIndex] != NULL) && conversionBufferSize != 8) {
-                        CHECK_GT(conversionBufferSize, (size_t)0);
-                        if (getTrebleFlag()) {
-                            bool success;
-                            mAllocator[portIndex]->allocate(
-                                    conversionBufferSize,
-                                    [&success, &hidlMemToken](
-                                            bool s,
-                                            hidl_memory const& m) {
-                                        success = s;
-                                        hidlMemToken = m;
-                                    });
-                            if (!success) {
-                                return NO_MEMORY;
-                            }
-                            hidlMem = mapMemory(hidlMemToken);
-                            if (hidlMem == nullptr) {
-                                return NO_MEMORY;
-                            }
-                            info.mData = new SharedMemoryBuffer(format, hidlMem);
-                            info.mMemRef = hidlMem;
-                        } else {
-                            mem = mDealer[portIndex]->allocate(
-                                    conversionBufferSize);
-                            if (mem == NULL|| mem->pointer() == NULL) {
-                                return NO_MEMORY;
-                            }
-                            info.mData = new SharedMemoryBuffer(format, mem);
-                            info.mMemRef = mem;
-                        }
-                    } else {
-			ALOGE("%s: conversionBufferSize = 8", __func__);
-                        info.mData = info.mCodecData;
-                        info.mMemRef = info.mCodecRef;
-                    }
+                mem = mDealer[portIndex]->allocate(bufSize);
+                if (mem == NULL || mem->pointer() == NULL) {
+                    return NO_MEMORY;
                 }
 
-                mBuffers[portIndex].push(info);
+                err = mOMXNode->useBuffer(
+                        portIndex, mem, &info.mBufferID);
+
+                info.mCodecData = new SharedMemoryBuffer(
+                        format, mem);
+                info.mCodecRef = mem;
+#if 0
+                // if we require conversion, allocate conversion buffer for client use;
+                // otherwise, reuse codec buffer
+                if (mConverter[portIndex] != NULL) {
+                    CHECK_GT(conversionBufferSize, (size_t)0);
+                    mem = mDealer[portIndex]->allocate(
+                            conversionBufferSize);
+                    if (mem == NULL|| mem->pointer() == NULL) {
+                        return NO_MEMORY;
+                    }
+                    info.mData = new SharedMemoryBuffer(format, mem);
+                    info.mMemRef = mem;
+               } else {
+#else
+                    info.mData = info.mCodecData;
+                    info.mMemRef = info.mCodecRef;
+#endif
+#if 0
+               }
+#endif
+
+               mBuffers[portIndex].push(info);
             }
         }
     }
