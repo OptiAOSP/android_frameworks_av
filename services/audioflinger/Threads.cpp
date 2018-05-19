@@ -6678,6 +6678,30 @@ void AudioFlinger::RecordThread::inputStandBy()
         }
     }
     mInput->stream->common.standby(&mInput->stream->common);
+
+    // The fast thread is paused, now clean the data in the pipe.
+    // Or they will leak to the next record session.
+    // Maybe the more reasonalbe way is to save the rest data to the record file.
+    // But I can't found a elegant way to implement.
+    if (mPipeSource != 0) {
+        size_t framesRead = 0;
+        size_t framesToRead = mBufferSize / mFrameSize;
+        uint8_t *tmpBuf = (uint8_t *)malloc(mBufferSize);
+        if(NULL == tmpBuf)
+            goto finish;
+
+        ALOGI("Begin clean pipe data");
+        do {
+            framesRead = mPipeSource->read(tmpBuf, framesToRead);
+            ALOGI("Clean pipe, read %d frames, expected %d frames", framesRead, framesToRead);
+        } while(framesRead > 0);
+        ALOGI("End clean pipe data");
+
+        free(tmpBuf);
+    }
+
+finish:
+    return;
 }
 
 // RecordThread::createRecordTrack_l() must be called with AudioFlinger::mLock held
