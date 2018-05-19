@@ -31,9 +31,6 @@
 #include "IcuUtils.h"
 #include "MediaPlayerService.h"
 #include "ResourceManagerService.h"
-#ifdef METADATA_CAMERA_SOURCE
-#include "CameraService.h"
-#endif
 
 using namespace android;
 
