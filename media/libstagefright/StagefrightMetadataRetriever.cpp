@@ -226,6 +226,7 @@ static VideoFrame *extractVideoFrame(
     if (err != OK) {
         ALOGW("source failed to start: %d (%s)", err, asString(err));
         decoder->release();
+        source->stop();
         return NULL;
     }
 
