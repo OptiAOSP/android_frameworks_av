@@ -92,6 +92,10 @@ struct ACodec : public AHierarchicalStateMachine, public CodecBase {
         handleMessage(msg);
     }
 
+#ifdef STE_HARDWARE
+    static uint32_t OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue);
+#endif
+
     struct PortDescription : public CodecBase::PortDescription {
         size_t countBuffers();
         IOMX::buffer_id bufferIDAt(size_t index) const;
@@ -129,6 +133,9 @@ struct ACodec : public AHierarchicalStateMachine, public CodecBase {
     enum Quirks {
         kRequiresAllocateBufferOnInputPorts   = 1,
         kRequiresAllocateBufferOnOutputPorts  = 2,
+#ifdef STE_HARDWARE
+        kRequiresStoreMetaDataBeforeIdle      = 16384,
+#endif
     };
 
     static status_t getOMXChannelMapping(size_t numChannels, OMX_AUDIO_CHANNELTYPE map[]);

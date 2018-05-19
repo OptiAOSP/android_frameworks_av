@@ -1047,7 +1047,11 @@ status_t ACodec::setupNativeWindowSizeFormatAndUsage(
 #ifdef USE_SAMSUNG_COLORFORMAT
             eNativeColorFormat,
 #else
+#ifdef STE_HARDWARE
+            OmxToHALFormat(def.format.video.eColorFormat),
+#else
             def.format.video.eColorFormat,
+#endif
 #endif
             mRotationDegrees,
             usage,
@@ -6515,7 +6519,7 @@ bool ACodec::BaseState::onOMXFillBufferDone(
                 mCodec->mSkipCutBuffer->submit(info->mData);
             }
             info->mData->meta()->setInt64("timeUs", timeUs);
-            info->mData->meta()->setObject("graphic-buffer", info->mGraphicBuffer);
+            //info->mData->meta()->setObject("graphic-buffer", info->mGraphicBuffer);
 
             sp<AMessage> notify = mCodec->mNotify->dup();
             notify->setInt32("what", CodecBase::kWhatDrainThisBuffer);
@@ -8718,5 +8722,19 @@ void ACodec::setBFrames(
     }
     return;
 }
+
+#ifdef STE_HARDWARE
+uint32_t ACodec::OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue) {
+    switch (omxValue) {
+        case OMX_STE_COLOR_FormatYUV420PackedSemiPlanarMB:
+            return HAL_PIXEL_FORMAT_YCBCR42XMBN;
+        case OMX_COLOR_FormatYUV420Planar:
+            return HAL_PIXEL_FORMAT_YCbCr_420_P;
+        default:
+            ALOGI("Unknown OMX pixel format (0x%X), passing it on unchanged", omxValue);
+            return omxValue;
+    }
+}
+#endif
 
 }  // namespace android

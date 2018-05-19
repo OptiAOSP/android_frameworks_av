@@ -1229,6 +1229,11 @@ uint32_t MediaCodecList::getQuirksFor(const char *componentName) {
     if (info->hasQuirk("requires-allocate-on-output-ports")) {
         quirks |= ACodec::kRequiresAllocateBufferOnOutputPorts;
     }
+#ifdef STE_HARDWARE
+    if (info->hasQuirk("requires-store-metadata-before-idle")) {
+        quirks |= ACodec::kRequiresStoreMetaDataBeforeIdle;
+    }
+#endif
 
     return quirks;
 }
