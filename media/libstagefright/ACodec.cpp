@@ -841,6 +841,9 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
         if (err == OK) {
             MetadataBufferType type =
                 portIndex == kPortIndexOutput ? mOutputMetadataType : mInputMetadataType;
+
+            ALOGI("%s: input (%d), type = %d", __func__, portIndex == kPortIndexInput, type);
+
             size_t bufSize = def.nBufferSize;
             if (type == kMetadataBufferTypeANWBuffer) {
                 bufSize = sizeof(VideoNativeMetadata);
@@ -1928,8 +1931,8 @@ status_t ACodec::configureCodec(
             && msg->findInt32("android._store-metadata-in-buffers-output", &storeMeta)
             && storeMeta != 0);
 
-        mOutputMetadataType = kMetadataBufferTypeNativeHandleSource;
 #ifndef STE_HARDWARE
+        mOutputMetadataType = kMetadataBufferTypeNativeHandleSource;
         err = mOMX->storeMetaDataInBuffers(mNode, kPortIndexOutput, enable, &mOutputMetadataType);
         if (err != OK) {
             ALOGE("[%s] storeMetaDataInBuffers (output) failed w/ err %d",
