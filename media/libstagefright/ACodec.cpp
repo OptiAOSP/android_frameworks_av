@@ -1875,6 +1875,7 @@ status_t ACodec::configureCodec(
     }
 
     int32_t storeMeta;
+#ifndef STE_HARDWARE
 #ifndef METADATA_CAMERA_SOURCE
     if (encoder
             && msg->findInt32("android._input-metadata-buffer-type", &storeMeta)
@@ -1916,6 +1917,7 @@ status_t ACodec::configureCodec(
                     "using-sw-read-often", !!(usageBits & GRALLOC_USAGE_SW_READ_OFTEN));
         }
     }
+#endif // STE_HARDWARE
 
     int32_t prependSPSPPS = 0;
     if (encoder
@@ -1961,12 +1963,13 @@ status_t ACodec::configureCodec(
 #ifndef METADATA_CAMERA_SOURCE
         mOutputMetadataType = kMetadataBufferTypeNativeHandleSource;
 #endif
+#ifndef STE_HARDWARE
         err = mOMX->storeMetaDataInBuffers(mNode, kPortIndexOutput, enable, &mOutputMetadataType);
         if (err != OK) {
             ALOGE("[%s] storeMetaDataInBuffers (output) failed w/ err %d",
                 mComponentName.c_str(), err);
         }
-
+#endif
         if (!msg->findInt64(
                     "repeat-previous-frame-after",
                     &mRepeatFrameDelayUs)) {
@@ -6939,6 +6942,17 @@ ACodec::LoadedState::LoadedState(ACodec *codec)
 
 void ACodec::LoadedState::stateEntered() {
     ALOGV("[%s] Now Loaded", mCodec->mComponentName.c_str());
+
+#ifdef STE_HARDWARE
+    int err;
+
+    if (mCodec->mQuirks & kRequiresStoreMetaDataBeforeIdle) {
+        ALOGV("%s: chrono: storing metadata before idle", mCodec->mComponentName.c_str());
+        err = mCodec->mOMX->storeMetaDataInBuffers(mCodec->mNode, kPortIndexInput, OMX_TRUE);
+        if (err != OK)
+            ALOGE("Storing meta data in video buffers is not supported");
+    }
+#endif
 
     mCodec->mPortEOS[kPortIndexInput] =
         mCodec->mPortEOS[kPortIndexOutput] = false;
