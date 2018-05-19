@@ -52,6 +52,10 @@ ifeq ($(strip $(DOLBY_ENABLE)),true)
 endif
 # DOLBY_END
 
+ifeq ($(TARGET_NUPLAYER_CANNOT_SET_SURFACE_WITHOUT_A_FLUSH),true)
+LOCAL_CFLAGS += -DCANNOT_SET_SURFACE_WITHOUT_A_FLUSH
+endif
+
 LOCAL_CLANG := true
 
 LOCAL_MODULE:= libstagefright_nuplayer
