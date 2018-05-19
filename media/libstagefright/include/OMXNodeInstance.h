@@ -21,7 +21,9 @@
 #include "OMX.h"
 
 #include <utils/RefBase.h>
+#ifndef METADATA_CAMERA_SOURCE
 #include <utils/SortedVector.h>
+#endif
 #include <utils/threads.h>
 
 namespace android {
@@ -152,9 +154,11 @@ private:
     OMX_HANDLETYPE mHandle;
     sp<IOMXObserver> mObserver;
     atomic_bool mDying;
+#ifndef METADATA_CAMERA_SOURCE
     bool mSailed;  // configuration is set (no more meta-mode changes)
     bool mQueriedProhibitedExtensions;
     SortedVector<OMX_INDEXTYPE> mProhibitedExtensions;
+#endif
     bool mIsSecure;
 
     // Lock only covers mGraphicBufferSource.  We can't always use mLock
@@ -175,7 +179,7 @@ private:
     KeyedVector<OMX::buffer_id, OMX_BUFFERHEADERTYPE *> mBufferIDToBufferHeader;
     KeyedVector<OMX_BUFFERHEADERTYPE *, OMX::buffer_id> mBufferHeaderToBufferID;
 
-    // metadata and secure buffer types and graphic buffer mode tracking
+    // metadata and secure buffer type tracking
     MetadataBufferType mMetadataType[2];
     enum SecureBufferType {
         kSecureBufferTypeUnknown,
@@ -183,7 +187,6 @@ private:
         kSecureBufferTypeNativeHandle,
     };
     SecureBufferType mSecureBufferType[2];
-    bool mGraphicBufferEnabled[2];
 
     // For debug support
     char *mName;
@@ -209,7 +212,9 @@ private:
     OMX::buffer_id findBufferID(OMX_BUFFERHEADERTYPE *bufferHeader);
     void invalidateBufferID(OMX::buffer_id buffer);
 
+#ifndef METADATA_CAMERA_SOURCE
     bool isProhibitedIndex_l(OMX_INDEXTYPE index);
+#endif
 
     status_t useGraphicBuffer2_l(
             OMX_U32 portIndex, const sp<GraphicBuffer> &graphicBuffer,
