@@ -137,7 +137,7 @@ protected:
     int64_t mPauseStartTimeUs;
     int64_t mTotalPausedDurationUs;
     sp<MediaCodecSource> mAudioEncoderSource;
-    sp<MediaCodecSource> mVideoEncoderSource;
+    sp<MediaSource> mVideoEncoderSource;
 
     bool mStarted;
     // Needed when GLFrames are encoded.
@@ -166,7 +166,7 @@ protected:
     status_t setupMediaSource(sp<MediaSource> *mediaSource);
     status_t setupCameraSource(sp<CameraSource> *cameraSource);
     status_t setupAudioEncoder(const sp<MediaWriter>& writer);
-    status_t setupVideoEncoder(sp<MediaSource> cameraSource, sp<MediaCodecSource> *source);
+    status_t setupVideoEncoder(sp<MediaSource> cameraSource, sp<MediaSource> *source);
     virtual void setupCustomVideoEncoderParams(sp<MediaSource> /*cameraSource*/,
             sp<AMessage> &/*format*/) {}
 
