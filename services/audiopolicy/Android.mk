@@ -68,7 +68,7 @@ ifeq ($(strip $(DOLBY_ENABLE)),true)
     LOCAL_CFLAGS += $(dolby_cflags)
 endif
 # DOLBY_END
-LOCAL_CFLAGS += -Wall -Werror
+LOCAL_CFLAGS += -Wall
 
 include $(BUILD_SHARED_LIBRARY)
 
@@ -126,7 +126,7 @@ ifeq ($(strip $(DOLBY_ENABLE)),true)
 endif
 # DOLBY_END
 
-LOCAL_CFLAGS += -Wall -Werror
+LOCAL_CFLAGS += -Wall
 
 LOCAL_MULTILIB := $(AUDIOSERVER_MULTILIB)
 
@@ -156,7 +156,7 @@ ifeq ($(strip $(DOLBY_ENABLE)),true)
 endif
 # DOLBY_END
 
-LOCAL_CFLAGS := -Wall -Werror
+LOCAL_CFLAGS := -Wall
 
 LOCAL_MULTILIB := $(AUDIOSERVER_MULTILIB)
 
