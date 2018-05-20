@@ -29,9 +29,7 @@
 #include <utils/List.h>
 #include <utils/RefBase.h>
 #include <utils/String16.h>
-#ifndef METADATA_CAMERA_SOURCE
 #include <media/hardware/MetadataBufferType.h>
-#endif
 
 namespace android {
 
@@ -119,7 +117,6 @@ public:
      */
     virtual sp<MetaData> getFormat();
 
-#ifndef METADATA_CAMERA_SOURCE
     /**
      * Tell whether this camera source stores meta data or real YUV
      * frame data in video buffers.
@@ -128,18 +125,7 @@ public:
      *      buffers; kMetadataBufferTypeInvalid if real YUV data is stored in
      *      the video buffers.
      */
-     MetadataBufferType metaDataStoredInVideoBuffers() const;
-#else
-    /**
-     * Tell whether this camera source stores meta data or real YUV
-     * frame data in video buffers.
-     *
-     * @return true if meta data is stored in the video
-     *      buffers; false if real YUV data is stored in
-     *      the video buffers.
-     */
-    bool isMetaDataStoredInVideoBuffers() const;
-#endif
+    MetadataBufferType metaDataStoredInVideoBuffers() const;
 
     virtual void signalBufferReturned(MediaBuffer* buffer);
 

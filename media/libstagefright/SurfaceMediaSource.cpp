@@ -23,9 +23,7 @@
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/MetaData.h>
 #include <OMX_IVCommon.h>
-#ifndef METADATA_CAMERA_SOURCE
 #include <media/hardware/HardwareAPI.h>
-#endif
 #include <media/hardware/MetadataBufferType.h>
 
 #include <ui/GraphicBuffer.h>
@@ -128,7 +126,6 @@ status_t SurfaceMediaSource::setFrameRate(int32_t fps)
     return OK;
 }
 
-#ifndef METADATA_CAMERA_SOURCE
 MetadataBufferType SurfaceMediaSource::metaDataStoredInVideoBuffers() const {
     ALOGV("isMetaDataStoredInVideoBuffers");
 #ifdef CAMCORDER_GRALLOC_SOURCE
@@ -137,12 +134,6 @@ MetadataBufferType SurfaceMediaSource::metaDataStoredInVideoBuffers() const {
     return kMetadataBufferTypeANWBuffer;
 #endif
 }
-#else
-bool SurfaceMediaSource::isMetaDataStoredInVideoBuffers() const {
-    ALOGV("isMetaDataStoredInVideoBuffers");
-    return true;
-}
-#endif
 
 int32_t SurfaceMediaSource::getFrameRate( ) const {
     ALOGV("getFrameRate");
@@ -262,24 +253,7 @@ sp<MetaData> SurfaceMediaSource::getFormat()
     return meta;
 }
 
-#ifndef METADATA_CAMERA_SOURCE
-// Pass the data to the MediaBuffer. Pass in only the metadata
-// Note: Call only when you have the lock
-void SurfaceMediaSource::passMetadataBuffer_l(MediaBuffer **buffer,
-        ANativeWindowBuffer *bufferHandle) const {
-    *buffer = new MediaBuffer(sizeof(VideoNativeMetadata));
-    VideoNativeMetadata *data = (VideoNativeMetadata *)(*buffer)->data();
-    if (data == NULL) {
-        ALOGE("Cannot allocate memory for metadata buffer!");
-        return;
-    }
-    data->eType = metaDataStoredInVideoBuffers();
-    data->pBuffer = bufferHandle;
-    data->nFenceFd = -1;
-    ALOGV("handle = %p, offset = %zu, length = %zu",
-            bufferHandle, (*buffer)->range_length(), (*buffer)->range_offset());
-}
-#else
+#ifdef CAMCORDER_GRALLOC_SOURCE
 // Pass the data to the MediaBuffer. Pass in only the metadata
 // The metadata passed consists of two parts:
 // 1. First, there is an integer indicating that it is a GRAlloc
@@ -307,6 +281,23 @@ static void passMetadataBuffer(MediaBuffer **buffer,
             bufferHandle, (*buffer)->range_length(), (*buffer)->range_offset());
 }
 #endif
+
+// Pass the data to the MediaBuffer. Pass in only the metadata
+// Note: Call only when you have the lock
+void SurfaceMediaSource::passMetadataBuffer_l(MediaBuffer **buffer,
+        ANativeWindowBuffer *bufferHandle) const {
+    *buffer = new MediaBuffer(sizeof(VideoNativeMetadata));
+    VideoNativeMetadata *data = (VideoNativeMetadata *)(*buffer)->data();
+    if (data == NULL) {
+        ALOGE("Cannot allocate memory for metadata buffer!");
+        return;
+    }
+    data->eType = metaDataStoredInVideoBuffers();
+    data->pBuffer = bufferHandle;
+    data->nFenceFd = -1;
+    ALOGV("handle = %p, offset = %zu, length = %zu",
+            bufferHandle, (*buffer)->range_length(), (*buffer)->range_offset());
+}
 
 status_t SurfaceMediaSource::read(
         MediaBuffer **buffer, const ReadOptions * /* options */) {
@@ -393,10 +384,10 @@ status_t SurfaceMediaSource::read(
     mNumFramesEncoded++;
     // Pass the data to the MediaBuffer. Pass in only the metadata
 
-#ifndef METADATA_CAMERA_SOURCE
-    passMetadataBuffer_l(buffer, mSlots[mCurrentSlot].mGraphicBuffer->getNativeBuffer());
-#else
+#ifdef CAMCORDER_GRALLOC_SOURCE
     passMetadataBuffer(buffer, mSlots[mCurrentSlot].mGraphicBuffer->handle);
+#else
+    passMetadataBuffer_l(buffer, mSlots[mCurrentSlot].mGraphicBuffer->getNativeBuffer());
 #endif
 
     (*buffer)->setObserver(this);
