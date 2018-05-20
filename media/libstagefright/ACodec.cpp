@@ -857,6 +857,8 @@ status_t ACodec::allocateBuffersOnPort(OMX_U32 portIndex) {
         if (err == OK) {
             const IOMX::PortMode &mode = mPortMode[portIndex];
             size_t bufSize = def.nBufferSize;
+            ALOGI("%s: input (%d), mode = %d", __func__, portIndex == kPortIndexInput, mode);
+
             // Always allocate VideoNativeMetadata if using ANWBuffer.
             // OMX might use gralloc source internally, but we don't share
             // metadata buffer with OMX, OMX has its own headers.
@@ -1795,10 +1797,14 @@ status_t ACodec::configureCodec(
         } else {
             return BAD_VALUE;
         }
+#ifndef STE_HARDWARE
         err = setPortMode(kPortIndexInput, mode);
         if (err != OK) {
             return err;
         }
+#else
+        err = OK;
+#endif
 
         uint32_t usageBits;
         if (mOMXNode->getParameter(
@@ -1846,11 +1852,15 @@ status_t ACodec::configureCodec(
             enable = OMX_TRUE;
         }
 
+#ifndef STE_HARDWARE
         err = setPortMode(kPortIndexOutput, enable ?
                 IOMX::kPortModePresetSecureBuffer : IOMX::kPortModePresetByteBuffer);
         if (err != OK) {
             return err;
         }
+#else
+        err = OK;
+#endif
 
         if (!msg->findInt64(
                     "repeat-previous-frame-after",
