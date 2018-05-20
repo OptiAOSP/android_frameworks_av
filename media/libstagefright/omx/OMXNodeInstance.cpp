@@ -168,7 +168,17 @@ struct BufferMeta {
 
     // return the codec buffer
     sp<ABuffer> getBuffer(const OMX_BUFFERHEADERTYPE *header, bool limit) {
-        sp<ABuffer> buf = new ABuffer(header->pBuffer, header->nAllocLen);
+        return getBuffer(header, false, limit);
+    }
+
+    // return either the codec or the backup buffer
+    sp<ABuffer> getBuffer(const OMX_BUFFERHEADERTYPE *header, bool backup, bool limit) {
+        sp<ABuffer> buf;
+        if (backup && mMem != NULL) {
+            buf = new ABuffer(mMem->pointer(), mMem->size());
+        } else {
+            buf = new ABuffer(header->pBuffer, header->nAllocLen);
+        }
         if (limit) {
             if (header->nOffset + header->nFilledLen > header->nOffset
                     && header->nOffset + header->nFilledLen <= header->nAllocLen) {
@@ -1207,13 +1217,15 @@ status_t OMXNodeInstance::useBuffer_l(
     OMX_BUFFERHEADERTYPE *header;
     OMX_ERRORTYPE err = OMX_ErrorNone;
     bool isMetadata = mMetadataType[portIndex] != kMetadataBufferTypeInvalid;
-
+    ALOGE("%s: isMetadata: %d", __func__, isMetadata);
+    isMetadata = false;
+#if 0
     if (!isMetadata && mGraphicBufferEnabled[portIndex]) {
         ALOGE("b/62948670");
         android_errorWriteLog(0x534e4554, "62948670");
         return INVALID_OPERATION;
     }
-
+#endif
     size_t paramsSize;
     void* paramsPointer;
     if (params != NULL && hParams != NULL) {
@@ -2054,8 +2066,8 @@ status_t OMXNodeInstance::emptyBuffer_l(
         static_cast<BufferMeta *>(header->pAppPrivate);
 
 #ifdef CAMCORDER_GRALLOC_SOURCE
-    sp<ABuffer> backup = buffer_meta->getBuffer(header, false /* limit */);
-    sp<ABuffer> codec = buffer_meta->getBuffer(header, false /* limit */);
+    sp<ABuffer> backup = buffer_meta->getBuffer(header, true /* backup */, false /* limit */);
+    sp<ABuffer> codec = buffer_meta->getBuffer(header, false /* backup */, false /* limit */);
 
     // convert incoming ANW meta buffers if component is configured for gralloc metadata mode
     // ignore rangeOffset in this case
