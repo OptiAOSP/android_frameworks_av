@@ -1072,6 +1072,10 @@ status_t OMXNodeInstance::useBuffer(
         return BAD_VALUE;
     }
 
+#if defined(STE_HARDWARE) && defined(LOG_DEBUG)
+    ALOGD("%s: omxBuffer.mBufferType = %d, input = %d, mMetadataType[portIndex] = ", __func__, omxBuffer.mBufferType, portIndex == kPortIndexInput, mMetadataType[portIndex]);
+#endif
+
     switch (omxBuffer.mBufferType) {
         case OMXBuffer::kBufferTypePreset:
             return useBuffer_l(portIndex, NULL, NULL, buffer);

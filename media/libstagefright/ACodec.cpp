@@ -811,6 +811,7 @@ status_t ACodec::handleSetSurface(const sp<Surface> &surface) {
 }
 
 status_t ACodec::setPortMode(int32_t portIndex, IOMX::PortMode mode) {
+    ALOGE("%s: setPortMode: mode = %d", mComponentName.c_str(), mode);
     status_t err = mOMXNode->setPortMode(portIndex, mode);
     if (err != OK) {
         ALOGE("[%s] setPortMode on %s to %s failed w/ err %d",
@@ -1240,9 +1241,11 @@ status_t ACodec::configureOutputBuffersFromNativeWindow(
 }
 
 status_t ACodec::allocateOutputBuffersFromNativeWindow() {
+#ifndef STE_HARDWARE
     // This method only handles the non-metadata mode (or simulating legacy
     // mode with metadata, which is transparent to ACodec).
     CHECK(!storingMetadataInDecodedBuffers());
+#endif
 
     OMX_U32 bufferCount, bufferSize, minUndequeuedBuffers;
     status_t err = configureOutputBuffersFromNativeWindow(
@@ -1251,8 +1254,14 @@ status_t ACodec::allocateOutputBuffersFromNativeWindow() {
         return err;
     mNumUndequeuedBuffers = minUndequeuedBuffers;
 
-    static_cast<Surface*>(mNativeWindow.get())
-            ->getIGraphicBufferProducer()->allowAllocation(true);
+#ifdef STE_HARDWARE
+    if (!storingMetadataInDecodedBuffers()) {
+#endif
+        static_cast<Surface*>(mNativeWindow.get())
+                ->getIGraphicBufferProducer()->allowAllocation(true);
+#ifdef STE_HARDWARE
+    }
+#endif
 
     ALOGV("[%s] Allocating %u buffers from a native window of size %u on "
          "output port",
@@ -1974,7 +1983,17 @@ status_t ACodec::configureCodec(
                 return err;
             }
 
-            err = setPortMode(kPortIndexOutput, IOMX::kPortModeDynamicANWBuffer);
+#ifdef STE_HARDWARE
+            bool isSteCodec = !mComponentName.compare("OMX.ST.VFM.H264Dec") ||
+                              !mComponentName.compare("OMX.ST.VFM.MPEG4Dec");
+
+            if (!isSteCodec)
+#endif
+                err = setPortMode(kPortIndexOutput, IOMX::kPortModeDynamicANWBuffer);
+#ifdef STE_HARDWARE
+            else err = OK;
+#endif
+
             if (err != OK) {
                 // if adaptive playback has been requested, try JB fallback
                 // NOTE: THIS FALLBACK MECHANISM WILL BE REMOVED DUE TO ITS
@@ -2022,7 +2041,11 @@ status_t ACodec::configureCodec(
             } else {
                 ALOGV("[%s] setPortMode on output to %s succeeded",
                         mComponentName.c_str(), asString(IOMX::kPortModeDynamicANWBuffer));
+#ifdef STE_HARDWARE
+                if (!isSteCodec)
+#endif
                 CHECK(storingMetadataInDecodedBuffers());
+
                 inputFormat->setInt32("adaptive-playback", true);
             }
 
