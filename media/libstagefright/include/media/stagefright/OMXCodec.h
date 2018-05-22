@@ -28,6 +28,11 @@
 
 namespace android {
 
+struct CodecProfileLevel {
+    OMX_U32 mProfile;
+    OMX_U32 mLevel;
+};
+
 struct MediaCodecInfo;
 class MemoryDealer;
 struct OMXCodecObserver;
@@ -66,11 +71,11 @@ struct OMXCodec : public BnMediaSource,
             const sp<MetaData> &meta, bool createEncoder,
             const sp<IMediaSource> &source,
             const char *matchComponentName = NULL,
-            uint32_t flags = 0,
-            const sp<ANativeWindow> &nativeWindow = NULL);
+            uint32_t flags = 0);
 
     static void setComponentRole(
-            const sp<IOMX> &omx, IOMX::node_id node, bool isEncoder,
+            sp<IOMXNode> OMXNode,
+            bool isEncoder,
             const char *mime);
 
     virtual status_t start(MetaData *params = NULL);
@@ -175,8 +180,9 @@ private:
     };
 
     sp<IOMX> mOMX;
-    bool mOMXLivesLocally;
-    IOMX::node_id mNode;
+    sp<IOMXNode> mOMXNode;
+    //sp<IOMXNode> mNode;
+    //int32_t mNodeGeneration;
     uint32_t mQuirks;
 
     // Flags specified in the creation of the codec.
@@ -214,8 +220,6 @@ private:
 
     bool mPaused;
 
-    sp<ANativeWindow> mNativeWindow;
-
     // The index in each of the mPortBuffers arrays of the buffer that will be
     // submitted to OMX next.  This only applies when using buffers from a
     // native window.
@@ -229,11 +233,10 @@ private:
     // a video encoder.
     List<int64_t> mDecodingTimeList;
 
-    OMXCodec(const sp<IOMX> &omx, IOMX::node_id node,
+    OMXCodec(const sp<IOMX> &omx, sp<IOMXNode> OMXNode,
              uint32_t quirks, uint32_t flags,
              bool isEncoder, const char *mime, const char *componentName,
-             const sp<IMediaSource> &source,
-             const sp<ANativeWindow> &nativeWindow);
+             const sp<IMediaSource> &source);
 
     void addCodecSpecificData(const void *data, size_t size);
     void clearCodecSpecificData();
@@ -384,7 +387,7 @@ struct CodecCapabilities {
 // OMX_VIDEO_H263PROFILETYPE, OMX_VIDEO_MPEG4PROFILETYPE,
 // OMX_VIDEO_AVCPROFILETYPE, OMX_VIDEO_H263LEVELTYPE, OMX_VIDEO_MPEG4LEVELTYPE
 // and OMX_VIDEO_AVCLEVELTYPE respectively.
-
+#if 0
 status_t QueryCodecs(
         const sp<IOMX> &omx,
         const char *mimeType, bool queryDecoders, bool hwCodecOnly,
@@ -400,7 +403,7 @@ status_t QueryCodec(
         const char *componentName, const char *mime,
         bool isEncoder,
         CodecCapabilities *caps);
-
+#endif
 }  // namespace android
 
 #endif  // OMX_CODEC_H_

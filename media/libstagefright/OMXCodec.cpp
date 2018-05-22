@@ -32,7 +32,7 @@
 #include <binder/IServiceManager.h>
 #include <binder/MemoryDealer.h>
 #include <binder/ProcessState.h>
-#include <HardwareAPI.h>
+#include <media/hardware/HardwareAPI.h>
 #include <media/stagefright/foundation/ADebug.h>
 #include <media/IMediaPlayerService.h>
 #include <media/stagefright/ACodec.h>
@@ -255,16 +255,18 @@ void OMXCodec::findMatchingCodecs(
 uint32_t OMXCodec::getComponentQuirks(
         const sp<MediaCodecInfo> &info) {
     uint32_t quirks = 0;
-    if (info->hasQuirk("requires-allocate-on-input-ports")) {
+
+//    if (info->hasQuirk("requires-allocate-on-input-ports")) {
         quirks |= kRequiresAllocateBufferOnInputPorts;
-    }
-    if (info->hasQuirk("requires-allocate-on-output-ports")) {
+//    }
+//    if (info->hasQuirk("requires-allocate-on-output-ports")) {
         quirks |= kRequiresAllocateBufferOnOutputPorts;
-    }
+//    }
+#if 0
     if (info->hasQuirk("output-buffers-are-unreadable")) {
         quirks |= kOutputBuffersAreUnreadable;
     }
-
+#endif
     return quirks;
 }
 
@@ -274,8 +276,7 @@ sp<IMediaSource> OMXCodec::Create(
         const sp<MetaData> &meta, bool createEncoder,
         const sp<IMediaSource> &source,
         const char *matchComponentName,
-        uint32_t flags,
-        const sp<ANativeWindow> &nativeWindow) {
+        uint32_t flags) {
     int32_t requiresSecureBuffers;
     if (source->getFormat()->findInt32(
                 kKeyRequiresSecureBuffers,
@@ -301,7 +302,8 @@ sp<IMediaSource> OMXCodec::Create(
     }
 
     sp<OMXCodecObserver> observer = new OMXCodecObserver;
-    IOMX::node_id node = 0;
+    //int32_t nodeGeneration = 0;
+    sp<IOMXNode> node;
 
     for (size_t i = 0; i < matchingCodecs.size(); ++i) {
         const char *componentNameBase = matchingCodecs[i].mName.string();
@@ -344,8 +346,7 @@ sp<IMediaSource> OMXCodec::Create(
             }
         }
 
-        status_t err = omx->allocateNode(componentName, observer,
-		NULL /* nodeBinder */, &node);
+        status_t err = omx->allocateNode(componentName, observer, &node);
 
         if (err == OK) {
             ALOGV("Successfully allocated OMX node '%s'", componentName);
@@ -353,7 +354,7 @@ sp<IMediaSource> OMXCodec::Create(
             sp<OMXCodec> codec = new OMXCodec(
                     omx, node, quirks, flags,
                     createEncoder, mime, componentName,
-                    source, nativeWindow);
+                    source);
 
             observer->setCodec(codec);
 
@@ -664,8 +665,7 @@ status_t OMXCodec::configureCodec(const sp<MetaData> &meta) {
         OMX_INDEXTYPE index;
 
         status_t err =
-            mOMX->getExtensionIndex(
-                    mNode,
+            mOMXNode->getExtensionIndex(
                     "OMX.SEC.index.ThumbnailMode",
                     &index);
 
@@ -674,7 +674,7 @@ status_t OMXCodec::configureCodec(const sp<MetaData> &meta) {
         }
 
         OMX_BOOL enable = OMX_TRUE;
-        err = mOMX->setConfig(mNode, index, &enable, sizeof(enable));
+        err = mOMXNode->setConfig( index, &enable, sizeof(enable));
 
         if (err != OK) {
             CODEC_LOGE("setConfig('OMX.SEC.index.ThumbnailMode') "
@@ -685,7 +685,7 @@ status_t OMXCodec::configureCodec(const sp<MetaData> &meta) {
 
         mQuirks &= ~kOutputBuffersAreUnreadable;
     }
-
+#if 0
     if (mNativeWindow != NULL
         && !mIsEncoder
         && !strncasecmp(mMIME, "video/", 6)
@@ -695,6 +695,7 @@ status_t OMXCodec::configureCodec(const sp<MetaData> &meta) {
             return err;
         }
     }
+#endif
 
     return OK;
 }
@@ -704,8 +705,8 @@ void OMXCodec::setMinBufferSize(OMX_U32 portIndex, OMX_U32 size) {
     InitOMXParams(&def);
     def.nPortIndex = portIndex;
 
-    status_t err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    status_t err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 
     if ((portIndex == kPortIndexInput && (mQuirks & kInputBufferSizesAreBogus))
@@ -713,12 +714,12 @@ void OMXCodec::setMinBufferSize(OMX_U32 portIndex, OMX_U32 size) {
         def.nBufferSize = size;
     }
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->setParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 
-    err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 
     // Make sure the setting actually stuck.
@@ -743,8 +744,8 @@ status_t OMXCodec::setVideoPortFormatType(
     OMX_U32 index = 0;
     for (;;) {
         format.nIndex = index;
-        status_t err = mOMX->getParameter(
-                mNode, OMX_IndexParamVideoPortFormat,
+        status_t err = mOMXNode->getParameter(
+                OMX_IndexParamVideoPortFormat,
                 &format, sizeof(format));
 
         if (err != OK) {
@@ -779,8 +780,8 @@ status_t OMXCodec::setVideoPortFormatType(
     }
 
     CODEC_LOGV("found a match.");
-    status_t err = mOMX->setParameter(
-            mNode, OMX_IndexParamVideoPortFormat,
+    status_t err = mOMXNode->setParameter(
+            OMX_IndexParamVideoPortFormat,
             &format, sizeof(format));
 
     return err;
@@ -842,8 +843,8 @@ status_t OMXCodec::isColorFormatSupported(
     OMX_U32 index = 0;
     portFormat.nIndex = index;
     while (true) {
-        if (OMX_ErrorNone != mOMX->getParameter(
-                mNode, OMX_IndexParamVideoPortFormat,
+        if (OMX_ErrorNone != mOMXNode->getParameter(
+                OMX_IndexParamVideoPortFormat,
                 &portFormat, sizeof(portFormat))) {
             break;
         }
@@ -909,8 +910,8 @@ void OMXCodec::setVideoInputFormat(
     InitOMXParams(&def);
     def.nPortIndex = kPortIndexInput;
 
-    err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 
     def.nBufferSize = getFrameSize(colorFormat,
@@ -926,8 +927,8 @@ void OMXCodec::setVideoInputFormat(
     video_def->eCompressionFormat = OMX_VIDEO_CodingUnused;
     video_def->eColorFormat = colorFormat;
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->setParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 
     //////////////////////// Output port /////////////////////////
@@ -937,8 +938,8 @@ void OMXCodec::setVideoInputFormat(
     InitOMXParams(&def);
     def.nPortIndex = kPortIndexOutput;
 
-    err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
 
     CHECK_EQ(err, (status_t)OK);
     CHECK_EQ((int)def.eDomain, (int)OMX_PortDomainVideo);
@@ -954,8 +955,8 @@ void OMXCodec::setVideoInputFormat(
         def.nBufferSize = ((def.nBufferSize * 3) >> 1);
     }
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->setParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 
     /////////////////// Codec-specific ////////////////////////
@@ -997,8 +998,8 @@ status_t OMXCodec::setupErrorCorrectionParameters() {
     InitOMXParams(&errorCorrectionType);
     errorCorrectionType.nPortIndex = kPortIndexOutput;
 
-    status_t err = mOMX->getParameter(
-            mNode, OMX_IndexParamVideoErrorCorrection,
+    status_t err = mOMXNode->getParameter(
+            OMX_IndexParamVideoErrorCorrection,
             &errorCorrectionType, sizeof(errorCorrectionType));
     if (err != OK) {
         ALOGW("Error correction param query is not supported");
@@ -1011,8 +1012,8 @@ status_t OMXCodec::setupErrorCorrectionParameters() {
     errorCorrectionType.bEnableDataPartitioning = OMX_FALSE;
     errorCorrectionType.bEnableRVLC = OMX_FALSE;
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamVideoErrorCorrection,
+    err = mOMXNode->setParameter(
+            OMX_IndexParamVideoErrorCorrection,
             &errorCorrectionType, sizeof(errorCorrectionType));
     if (err != OK) {
         ALOGW("Error correction param configuration is not supported");
@@ -1027,16 +1028,16 @@ status_t OMXCodec::setupBitRate(int32_t bitRate) {
     InitOMXParams(&bitrateType);
     bitrateType.nPortIndex = kPortIndexOutput;
 
-    status_t err = mOMX->getParameter(
-            mNode, OMX_IndexParamVideoBitrate,
+    status_t err = mOMXNode->getParameter(
+            OMX_IndexParamVideoBitrate,
             &bitrateType, sizeof(bitrateType));
     CHECK_EQ(err, (status_t)OK);
 
     bitrateType.eControlRate = OMX_Video_ControlRateVariable;
     bitrateType.nTargetBitrate = bitRate;
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamVideoBitrate,
+    err = mOMXNode->setParameter(
+            OMX_IndexParamVideoBitrate,
             &bitrateType, sizeof(bitrateType));
     CHECK_EQ(err, (status_t)OK);
     return OK;
@@ -1064,8 +1065,8 @@ status_t OMXCodec::getVideoProfileLevel(
     InitOMXParams(&param);
     param.nPortIndex = kPortIndexOutput;
     for (param.nProfileIndex = 0;; ++param.nProfileIndex) {
-        status_t err = mOMX->getParameter(
-                mNode, OMX_IndexParamVideoProfileLevelQuerySupported,
+        status_t err = mOMXNode->getParameter(
+                OMX_IndexParamVideoProfileLevelQuerySupported,
                 &param, sizeof(param));
 
         if (err != OK) break;
@@ -1101,8 +1102,8 @@ status_t OMXCodec::setupH263EncoderParameters(const sp<MetaData>& meta) {
     InitOMXParams(&h263type);
     h263type.nPortIndex = kPortIndexOutput;
 
-    status_t err = mOMX->getParameter(
-            mNode, OMX_IndexParamVideoH263, &h263type, sizeof(h263type));
+    status_t err = mOMXNode->getParameter(
+            OMX_IndexParamVideoH263, &h263type, sizeof(h263type));
     CHECK_EQ(err, (status_t)OK);
 
     h263type.nAllowedPictureTypes =
@@ -1113,7 +1114,6 @@ status_t OMXCodec::setupH263EncoderParameters(const sp<MetaData>& meta) {
         h263type.nAllowedPictureTypes = OMX_VIDEO_PictureTypeI;
     }
     h263type.nBFrames = 0;
-
     // Check profile and level parameters
     CodecProfileLevel defaultProfileLevel, profileLevel;
     defaultProfileLevel.mProfile = h263type.eProfile;
@@ -1128,8 +1128,8 @@ status_t OMXCodec::setupH263EncoderParameters(const sp<MetaData>& meta) {
     h263type.nPictureHeaderRepetition = 0;
     h263type.nGOBHeaderInterval = 0;
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamVideoH263, &h263type, sizeof(h263type));
+    err = mOMXNode->setParameter(
+            OMX_IndexParamVideoH263, &h263type, sizeof(h263type));
     CHECK_EQ(err, (status_t)OK);
 
     CHECK_EQ(setupBitRate(bitRate), (status_t)OK);
@@ -1148,8 +1148,8 @@ status_t OMXCodec::setupMPEG4EncoderParameters(const sp<MetaData>& meta) {
     InitOMXParams(&mpeg4type);
     mpeg4type.nPortIndex = kPortIndexOutput;
 
-    status_t err = mOMX->getParameter(
-            mNode, OMX_IndexParamVideoMpeg4, &mpeg4type, sizeof(mpeg4type));
+    status_t err = mOMXNode->getParameter(
+            OMX_IndexParamVideoMpeg4, &mpeg4type, sizeof(mpeg4type));
     CHECK_EQ(err, (status_t)OK);
 
     mpeg4type.nSliceHeaderSpacing = 0;
@@ -1180,8 +1180,8 @@ status_t OMXCodec::setupMPEG4EncoderParameters(const sp<MetaData>& meta) {
     mpeg4type.eProfile = static_cast<OMX_VIDEO_MPEG4PROFILETYPE>(profileLevel.mProfile);
     mpeg4type.eLevel = static_cast<OMX_VIDEO_MPEG4LEVELTYPE>(profileLevel.mLevel);
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamVideoMpeg4, &mpeg4type, sizeof(mpeg4type));
+    err = mOMXNode->setParameter(
+            OMX_IndexParamVideoMpeg4, &mpeg4type, sizeof(mpeg4type));
     CHECK_EQ(err, (status_t)OK);
 
     CHECK_EQ(setupBitRate(bitRate), (status_t)OK);
@@ -1201,8 +1201,8 @@ status_t OMXCodec::setupAVCEncoderParameters(const sp<MetaData>& meta) {
     InitOMXParams(&h264type);
     h264type.nPortIndex = kPortIndexOutput;
 
-    status_t err = mOMX->getParameter(
-            mNode, OMX_IndexParamVideoAvc, &h264type, sizeof(h264type));
+    status_t err = mOMXNode->getParameter(
+            OMX_IndexParamVideoAvc, &h264type, sizeof(h264type));
     CHECK_EQ(err, (status_t)OK);
 
     h264type.nAllowedPictureTypes =
@@ -1255,8 +1255,8 @@ status_t OMXCodec::setupAVCEncoderParameters(const sp<MetaData>& meta) {
     h264type.bMBAFF = OMX_FALSE;
     h264type.eLoopFilterMode = OMX_VIDEO_AVCLoopFilterEnable;
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamVideoAvc, &h264type, sizeof(h264type));
+    err = mOMXNode->setParameter(
+            OMX_IndexParamVideoAvc, &h264type, sizeof(h264type));
     CHECK_EQ(err, (status_t)OK);
 
     CHECK_EQ(setupBitRate(bitRate), (status_t)OK);
@@ -1310,8 +1310,8 @@ status_t OMXCodec::setVideoOutputFormat(
         format.nPortIndex = kPortIndexOutput;
         format.nIndex = 0;
 
-        status_t err = mOMX->getParameter(
-                mNode, OMX_IndexParamVideoPortFormat,
+        status_t err = mOMXNode->getParameter(
+                OMX_IndexParamVideoPortFormat,
                 &format, sizeof(format));
         CHECK_EQ(err, (status_t)OK);
         CHECK_EQ((int)format.eCompressionFormat, (int)OMX_VIDEO_CodingUnused);
@@ -1323,8 +1323,8 @@ status_t OMXCodec::setVideoOutputFormat(
 
             while (OMX_ErrorNoMore != err) {
                 format.nIndex++;
-                err = mOMX->getParameter(
-                        mNode, OMX_IndexParamVideoPortFormat,
+                err = mOMXNode->getParameter(
+                        OMX_IndexParamVideoPortFormat,
                             &format, sizeof(format));
                 if (format.eColorFormat == colorFormat) {
                     break;
@@ -1336,8 +1336,8 @@ status_t OMXCodec::setVideoOutputFormat(
             }
         }
 
-        err = mOMX->setParameter(
-                mNode, OMX_IndexParamVideoPortFormat,
+        err = mOMXNode->setParameter(
+                OMX_IndexParamVideoPortFormat,
                 &format, sizeof(format));
 
         if (err != OK) {
@@ -1352,8 +1352,8 @@ status_t OMXCodec::setVideoOutputFormat(
 
     OMX_VIDEO_PORTDEFINITIONTYPE *video_def = &def.format.video;
 
-    err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
 
     CHECK_EQ(err, (status_t)OK);
 
@@ -1373,8 +1373,8 @@ status_t OMXCodec::setVideoOutputFormat(
     video_def->eCompressionFormat = compressionFormat;
     video_def->eColorFormat = OMX_COLOR_FormatUnused;
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->setParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
 
     if (err != OK) {
         return err;
@@ -1385,8 +1385,8 @@ status_t OMXCodec::setVideoOutputFormat(
     InitOMXParams(&def);
     def.nPortIndex = kPortIndexOutput;
 
-    err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
     CHECK_EQ((int)def.eDomain, (int)OMX_PortDomainVideo);
 
@@ -1398,23 +1398,20 @@ status_t OMXCodec::setVideoOutputFormat(
     video_def->nFrameWidth = width;
     video_def->nFrameHeight = height;
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->setParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
 
     return err;
 }
 
-OMXCodec::OMXCodec(
-        const sp<IOMX> &omx, IOMX::node_id node,
+OMXCodec::OMXCodec(const sp<IOMX> &omx, sp<IOMXNode> OMXNode,
         uint32_t quirks, uint32_t flags,
         bool isEncoder,
         const char *mime,
         const char *componentName,
-        const sp<IMediaSource> &source,
-        const sp<ANativeWindow> &nativeWindow)
+        const sp<IMediaSource> &source)
     : mOMX(omx),
-      mOMXLivesLocally(omx->livesLocally(node, getpid())),
-      mNode(node),
+      mOMXNode(OMXNode),
       mQuirks(quirks),
       mFlags(flags),
       mIsEncoder(isEncoder),
@@ -1434,10 +1431,7 @@ OMXCodec::OMXCodec(
       mOutputPortSettingsChangedPending(false),
       mSkipCutBuffer(NULL),
       mLeftOverBuffer(NULL),
-      mPaused(false),
-      mNativeWindow(
-              (!strncmp(componentName, "OMX.google.", 11))
-                        ? NULL : nativeWindow) {
+      mPaused(false) {
     mPortStatus[kPortIndexInput] = ENABLED;
     mPortStatus[kPortIndexOutput] = ENABLED;
 
@@ -1445,8 +1439,7 @@ OMXCodec::OMXCodec(
 }
 
 // static
-void OMXCodec::setComponentRole(
-        const sp<IOMX> &omx, IOMX::node_id node, bool isEncoder,
+void OMXCodec::setComponentRole(sp<IOMXNode> OMXNode, bool isEncoder,
         const char *mime) {
     struct MimeToRole {
         const char *mime;
@@ -1528,8 +1521,7 @@ void OMXCodec::setComponentRole(
 
         roleParams.cRole[OMX_MAX_STRINGNAME_SIZE - 1] = '\0';
 
-        status_t err = omx->setParameter(
-                node, OMX_IndexParamStandardComponentRole,
+        status_t err = OMXNode->setParameter(OMX_IndexParamStandardComponentRole,
                 &roleParams, sizeof(roleParams));
 
         if (err != OK) {
@@ -1539,7 +1531,7 @@ void OMXCodec::setComponentRole(
 }
 
 void OMXCodec::setComponentRole() {
-    setComponentRole(mOMX, mNode, mIsEncoder, mMIME);
+    setComponentRole(mOMXNode, mIsEncoder, mMIME);
 }
 
 OMXCodec::~OMXCodec() {
@@ -1547,10 +1539,10 @@ OMXCodec::~OMXCodec() {
 
     CHECK(mState == LOADED || mState == ERROR || mState == LOADED_TO_IDLE);
 
-    status_t err = mOMX->freeNode(mNode);
+    status_t err = mOMXNode->freeNode();
     CHECK_EQ(err, (status_t)OK);
 
-    mNode = 0;
+    mOMXNode = 0;
     setState(DEAD);
 
     clearCodecSpecificData();
@@ -1569,7 +1561,7 @@ status_t OMXCodec::init() {
 
     status_t err;
     if (!(mQuirks & kRequiresLoadedToIdleAfterAllocation)) {
-        err = mOMX->sendCommand(mNode, OMX_CommandStateSet, OMX_StateIdle);
+        err = mOMXNode->sendCommand( OMX_CommandStateSet, OMX_StateIdle);
         CHECK_EQ(err, (status_t)OK);
         setState(LOADED_TO_IDLE);
     }
@@ -1580,7 +1572,7 @@ status_t OMXCodec::init() {
     }
 
     if (mQuirks & kRequiresLoadedToIdleAfterAllocation) {
-        err = mOMX->sendCommand(mNode, OMX_CommandStateSet, OMX_StateIdle);
+        err = mOMXNode->sendCommand( OMX_CommandStateSet, OMX_StateIdle);
         CHECK_EQ(err, (status_t)OK);
 
         setState(LOADED_TO_IDLE);
@@ -1613,9 +1605,11 @@ status_t OMXCodec::allocateBuffers() {
 }
 
 status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
+#if 0
     if (mNativeWindow != NULL && portIndex == kPortIndexOutput) {
         return allocateOutputBuffersFromNativeWindow();
     }
+#endif
 
     if ((mFlags & kEnableGrallocUsageProtected) && portIndex == kPortIndexOutput) {
         ALOGE("protected output buffers must be stent to an ANativeWindow");
@@ -1625,7 +1619,7 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
     status_t err = OK;
     if ((mFlags & kStoreMetaDataInVideoBuffers)
             && portIndex == kPortIndexInput) {
-        err = mOMX->storeMetaDataInBuffers(mNode, kPortIndexInput, OMX_TRUE);
+        err = mOMXNode->storeMetaDataInBuffers( kPortIndexInput, OMX_TRUE);
         if (err != OK) {
             ALOGE("Storing meta data in video buffers is not supported");
             return err;
@@ -1636,8 +1630,8 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
     InitOMXParams(&def);
     def.nPortIndex = portIndex;
 
-    err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
 
     if (err != OK) {
         return err;
@@ -1667,32 +1661,14 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
         if (portIndex == kPortIndexInput
                 && ((mQuirks & kRequiresAllocateBufferOnInputPorts)
                     || (mFlags & kUseSecureInputBuffers))) {
-            if (mOMXLivesLocally) {
-		sp<NativeHandle> native_handle;
-                mem.clear();
-
-                err = mOMX->allocateSecureBuffer(
-                        mNode, portIndex, def.nBufferSize, &buffer,
-                        &info.mData, &native_handle);
-            } else {
-                err = mOMX->allocateBufferWithBackup(
-                        mNode, portIndex, mem, &buffer, mem->size());
-            }
+                err = mOMXNode->allocateBufferWithBackup(
+                        portIndex, mem, &buffer, mem->size());
         } else if (portIndex == kPortIndexOutput
                 && (mQuirks & kRequiresAllocateBufferOnOutputPorts)) {
-            if (mOMXLivesLocally) {
-		sp<NativeHandle> native_handle;
-                mem.clear();
-
-                err = mOMX->allocateSecureBuffer(
-                        mNode, portIndex, def.nBufferSize, &buffer,
-                        &info.mData, &native_handle);
-            } else {
-                err = mOMX->allocateBufferWithBackup(
-                        mNode, portIndex, mem, &buffer, mem->size());
-            }
+                err = mOMXNode->allocateBufferWithBackup(
+                        portIndex, mem, &buffer, mem->size());
         } else {
-            err = mOMX->useBuffer(mNode, portIndex, mem, &buffer, mem->size());
+            err = mOMXNode->useBuffer( portIndex, mem, &buffer, mem->size());
         }
 
         if (err != OK) {
@@ -1712,11 +1688,6 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
         if (portIndex == kPortIndexOutput) {
             // Fail deferred MediaBuffer creation until FILL_BUFFER_DONE;
             // this legacy mode is no longer supported.
-            LOG_ALWAYS_FATAL_IF((mOMXLivesLocally
-                    && (mQuirks & kRequiresAllocateBufferOnOutputPorts)
-                    && (mQuirks & kDefersOutputBufferAllocation)),
-                    "allocateBuffersOnPort cannot defer buffer allocation");
-
             info.mMediaBuffer = new MediaBuffer(info.mData, info.mSize);
             info.mMediaBuffer->setObserver(this);
         }
@@ -1783,13 +1754,14 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
 }
 
 status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
+#if 0
     // Get the number of buffers needed.
     OMX_PARAM_PORTDEFINITIONTYPE def;
     InitOMXParams(&def);
     def.nPortIndex = kPortIndexOutput;
 
-    status_t err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    status_t err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     if (err != OK) {
         CODEC_LOGE("getParameter failed: %d", err);
         return err;
@@ -1804,7 +1776,7 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
 
     // Set up the native window.
     OMX_U32 usage = 0;
-    err = mOMX->getGraphicBufferUsage(mNode, kPortIndexOutput, &usage);
+    err = mOMXNode->getGraphicBufferUsage( kPortIndexOutput, &usage);
     if (err != 0) {
         ALOGW("querying usage flags from OMX IL component failed: %d", err);
         // XXX: Currently this error is logged, but not fatal.
@@ -1854,8 +1826,8 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
         OMX_U32 newBufferCount =
             def.nBufferCountMin + minUndequeuedBufs + extraBuffers;
         def.nBufferCountActual = newBufferCount;
-        err = mOMX->setParameter(
-                mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+        err = mOMXNode->setParameter(
+                OMX_IndexParamPortDefinition, &def, sizeof(def));
 
         if (err == OK) {
             minUndequeuedBufs += extraBuffers;
@@ -1903,7 +1875,7 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
         mPortBuffers[kPortIndexOutput].push(info);
 
         IOMX::buffer_id bufferId;
-        err = mOMX->useGraphicBuffer(mNode, kPortIndexOutput, graphicBuffer,
+        err = mOMXNode->useGraphicBuffer( kPortIndexOutput, graphicBuffer,
                 &bufferId);
         if (err != 0) {
             CODEC_LOGE("registering GraphicBuffer with OMX IL component "
@@ -1936,9 +1908,12 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
     }
 
     return err;
+#endif
+    return OK;
 }
 
 status_t OMXCodec::cancelBufferToNativeWindow(BufferInfo *info) {
+#if 0
     CHECK_EQ((int)info->mStatus, (int)OWNED_BY_US);
     CODEC_LOGV("Calling cancelBuffer on buffer %u", info->mBuffer);
     int err = mNativeWindow->cancelBuffer(
@@ -1950,10 +1925,12 @@ status_t OMXCodec::cancelBufferToNativeWindow(BufferInfo *info) {
       return err;
     }
     info->mStatus = OWNED_BY_NATIVE_WINDOW;
+#endif
     return OK;
 }
 
 OMXCodec::BufferInfo* OMXCodec::dequeueBufferFromNativeWindow() {
+#if 0
     // Dequeue the next buffer from the native window.
     ANativeWindowBuffer* buf;
     int err = native_window_dequeue_buffer_and_wait(mNativeWindow.get(), &buf);
@@ -1988,6 +1965,7 @@ OMXCodec::BufferInfo* OMXCodec::dequeueBufferFromNativeWindow() {
     bufInfo->mStatus = OWNED_BY_US;
 
     return bufInfo;
+#endif
 }
 
 int64_t OMXCodec::getDecodingTimeUs() {
@@ -2323,8 +2301,7 @@ void OMXCodec::onEvent(OMX_EVENTTYPE event, OMX_U32 data1, OMX_U32 data2) {
                     scale.nPortIndex = kPortIndexOutput;
 
                     // Change display dimension only when necessary.
-                    if (OK == mOMX->getConfig(
-                                        mNode,
+                    if (OK == mOMXNode->getConfig(
                                         OMX_IndexConfigCommonScale,
                                         &scale, sizeof(scale))) {
                         int32_t left, top, right, bottom;
@@ -2478,7 +2455,7 @@ void OMXCodec::onCmdComplete(OMX_COMMANDTYPE cmd, OMX_U32 data) {
                     mPortStatus[kPortIndexOutput] = SHUTTING_DOWN;
 
                     status_t err =
-                        mOMX->sendCommand(mNode, OMX_CommandStateSet, OMX_StateIdle);
+                        mOMXNode->sendCommand( OMX_CommandStateSet, OMX_StateIdle);
                     CHECK_EQ(err, (status_t)OK);
                 }
             } else {
@@ -2524,8 +2501,8 @@ void OMXCodec::onStateChange(OMX_STATETYPE newState) {
         {
             CODEC_LOGV("Now Idle.");
             if (mState == LOADED_TO_IDLE) {
-                status_t err = mOMX->sendCommand(
-                        mNode, OMX_CommandStateSet, OMX_StateExecuting);
+                status_t err = mOMXNode->sendCommand(
+                        OMX_CommandStateSet, OMX_StateExecuting);
 
                 CHECK_EQ(err, (status_t)OK);
 
@@ -2551,8 +2528,8 @@ void OMXCodec::onStateChange(OMX_STATETYPE newState) {
                     TRESPASS();
                 }
 
-                status_t err = mOMX->sendCommand(
-                        mNode, OMX_CommandStateSet, OMX_StateLoaded);
+                status_t err = mOMXNode->sendCommand(
+                        OMX_CommandStateSet, OMX_StateLoaded);
 
                 CHECK_EQ(err, (status_t)OK);
 
@@ -2564,7 +2541,7 @@ void OMXCodec::onStateChange(OMX_STATETYPE newState) {
 
                 mPortStatus[kPortIndexInput] = ENABLED;
                 mPortStatus[kPortIndexOutput] = ENABLED;
-
+#if 0
                 if ((mFlags & kEnableGrallocUsageProtected) &&
                         mNativeWindow != NULL) {
                     // We push enough 1x1 blank buffers to ensure that one of
@@ -2573,7 +2550,7 @@ void OMXCodec::onStateChange(OMX_STATETYPE newState) {
                     // without the risk of scanning out one of those buffers.
                     pushBlankBuffersToNativeWindow(mNativeWindow.get());
                 }
-
+#endif
                 setState(IDLE_TO_LOADED);
             }
             break;
@@ -2670,7 +2647,7 @@ status_t OMXCodec::freeBuffer(OMX_U32 portIndex, size_t bufIndex) {
 
     BufferInfo *info = &buffers->editItemAt(bufIndex);
 
-    status_t err = mOMX->freeBuffer(mNode, portIndex, info->mBuffer);
+    status_t err = mOMXNode->freeBuffer( portIndex, info->mBuffer);
 
     if (err == OK && info->mMediaBuffer != NULL) {
         CHECK_EQ(portIndex, (OMX_U32)kPortIndexOutput);
@@ -2741,7 +2718,7 @@ bool OMXCodec::flushPortAsync(OMX_U32 portIndex) {
     }
 
     status_t err =
-        mOMX->sendCommand(mNode, OMX_CommandFlush, portIndex);
+        mOMXNode->sendCommand( OMX_CommandFlush, portIndex);
     CHECK_EQ(err, (status_t)OK);
 
     return true;
@@ -2755,7 +2732,7 @@ void OMXCodec::disablePortAsync(OMX_U32 portIndex) {
 
     CODEC_LOGV("sending OMX_CommandPortDisable(%u)", portIndex);
     status_t err =
-        mOMX->sendCommand(mNode, OMX_CommandPortDisable, portIndex);
+        mOMXNode->sendCommand( OMX_CommandPortDisable, portIndex);
     CHECK_EQ(err, (status_t)OK);
 
     freeBuffersOnPort(portIndex, true);
@@ -2768,7 +2745,7 @@ status_t OMXCodec::enablePortAsync(OMX_U32 portIndex) {
     mPortStatus[portIndex] = ENABLING;
 
     CODEC_LOGV("sending OMX_CommandPortEnable(%u)", portIndex);
-    return mOMX->sendCommand(mNode, OMX_CommandPortEnable, portIndex);
+    return mOMXNode->sendCommand( OMX_CommandPortEnable, portIndex);
 }
 
 void OMXCodec::fillOutputBuffers() {
@@ -2903,8 +2880,8 @@ bool OMXCodec::drainInputBuffer(BufferInfo *info) {
 
         CODEC_LOGV("calling emptyBuffer with codec specific data");
 
-        status_t err = mOMX->emptyBuffer(
-                mNode, info->mBuffer, 0, size,
+        status_t err = mOMXNode->emptyBuffer(
+                info->mBuffer, 0, size,
                 OMX_BUFFERFLAG_ENDOFFRAME | OMX_BUFFERFLAG_CODECCONFIG,
                 0);
         CHECK_EQ(err, (status_t)OK);
@@ -3095,8 +3072,8 @@ bool OMXCodec::drainInputBuffer(BufferInfo *info) {
                info->mBuffer, offset,
                (long long)timestampUs, timestampUs / 1E6);
 
-    err = mOMX->emptyBuffer(
-            mNode, info->mBuffer, 0, offset,
+    err = mOMXNode->emptyBuffer(
+            info->mBuffer, 0, offset,
             flags, timestampUs);
 
     if (err != OK) {
@@ -3119,7 +3096,7 @@ void OMXCodec::fillOutputBuffer(BufferInfo *info) {
     }
 
     CODEC_LOGV("Calling fillBuffer on buffer %u", info->mBuffer);
-    status_t err = mOMX->fillBuffer(mNode, info->mBuffer);
+    status_t err = mOMXNode->fillBuffer( info->mBuffer);
 
     if (err != OK) {
         CODEC_LOGE("fillBuffer failed w/ error 0x%08x", err);
@@ -3189,11 +3166,11 @@ void OMXCodec::setRawAudioFormat(
     OMX_PARAM_PORTDEFINITIONTYPE def;
     InitOMXParams(&def);
     def.nPortIndex = portIndex;
-    status_t err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    status_t err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
     def.format.audio.eEncoding = OMX_AUDIO_CodingPCM;
-    CHECK_EQ(mOMX->setParameter(mNode, OMX_IndexParamPortDefinition,
+    CHECK_EQ(mOMXNode->setParameter( OMX_IndexParamPortDefinition,
             &def, sizeof(def)), (status_t)OK);
 
     // pcm param
@@ -3201,8 +3178,8 @@ void OMXCodec::setRawAudioFormat(
     InitOMXParams(&pcmParams);
     pcmParams.nPortIndex = portIndex;
 
-    err = mOMX->getParameter(
-            mNode, OMX_IndexParamAudioPcm, &pcmParams, sizeof(pcmParams));
+    err = mOMXNode->getParameter(
+            OMX_IndexParamAudioPcm, &pcmParams, sizeof(pcmParams));
 
     CHECK_EQ(err, (status_t)OK);
 
@@ -3216,8 +3193,8 @@ void OMXCodec::setRawAudioFormat(
     CHECK_EQ(ACodec::getOMXChannelMapping(
                 numChannels, pcmParams.eChannelMapping), (status_t)OK);
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamAudioPcm, &pcmParams, sizeof(pcmParams));
+    err = mOMXNode->setParameter(
+            OMX_IndexParamAudioPcm, &pcmParams, sizeof(pcmParams));
 
     CHECK_EQ(err, (status_t)OK);
 }
@@ -3274,14 +3251,14 @@ void OMXCodec::setAMRFormat(bool isWAMR, int32_t bitRate) {
     def.nPortIndex = portIndex;
 
     status_t err =
-        mOMX->getParameter(mNode, OMX_IndexParamAudioAmr, &def, sizeof(def));
+        mOMXNode->getParameter( OMX_IndexParamAudioAmr, &def, sizeof(def));
 
     CHECK_EQ(err, (status_t)OK);
 
     def.eAMRFrameFormat = OMX_AUDIO_AMRFrameFormatFSF;
 
     def.eAMRBandMode = pickModeFromBitRate(isWAMR, bitRate);
-    err = mOMX->setParameter(mNode, OMX_IndexParamAudioAmr, &def, sizeof(def));
+    err = mOMXNode->setParameter( OMX_IndexParamAudioAmr, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 
     ////////////////////////
@@ -3319,7 +3296,7 @@ status_t OMXCodec::setAACFormat(
         format.nIndex = 0;
         status_t err = OMX_ErrorNone;
         while (OMX_ErrorNone == err) {
-            CHECK_EQ(mOMX->getParameter(mNode, OMX_IndexParamAudioPortFormat,
+            CHECK_EQ(mOMXNode->getParameter( OMX_IndexParamAudioPortFormat,
                     &format, sizeof(format)), (status_t)OK);
             if (format.eEncoding == OMX_AUDIO_CodingAAC) {
                 break;
@@ -3327,25 +3304,25 @@ status_t OMXCodec::setAACFormat(
             format.nIndex++;
         }
         CHECK_EQ((status_t)OK, err);
-        CHECK_EQ(mOMX->setParameter(mNode, OMX_IndexParamAudioPortFormat,
+        CHECK_EQ(mOMXNode->setParameter( OMX_IndexParamAudioPortFormat,
                 &format, sizeof(format)), (status_t)OK);
 
         // port definition
         OMX_PARAM_PORTDEFINITIONTYPE def;
         InitOMXParams(&def);
         def.nPortIndex = kPortIndexOutput;
-        CHECK_EQ(mOMX->getParameter(mNode, OMX_IndexParamPortDefinition,
+        CHECK_EQ(mOMXNode->getParameter( OMX_IndexParamPortDefinition,
                 &def, sizeof(def)), (status_t)OK);
         def.format.audio.bFlagErrorConcealment = OMX_TRUE;
         def.format.audio.eEncoding = OMX_AUDIO_CodingAAC;
-        CHECK_EQ(mOMX->setParameter(mNode, OMX_IndexParamPortDefinition,
+        CHECK_EQ(mOMXNode->setParameter( OMX_IndexParamPortDefinition,
                 &def, sizeof(def)), (status_t)OK);
 
         // profile
         OMX_AUDIO_PARAM_AACPROFILETYPE profile;
         InitOMXParams(&profile);
         profile.nPortIndex = kPortIndexOutput;
-        CHECK_EQ(mOMX->getParameter(mNode, OMX_IndexParamAudioAac,
+        CHECK_EQ(mOMXNode->getParameter( OMX_IndexParamAudioAac,
                 &profile, sizeof(profile)), (status_t)OK);
         profile.nChannels = numChannels;
         profile.eChannelMode = (numChannels == 1?
@@ -3358,7 +3335,7 @@ status_t OMXCodec::setAACFormat(
         profile.nAACERtools = OMX_AUDIO_AACERNone;
         profile.eAACProfile = (OMX_AUDIO_AACPROFILETYPE) aacProfile;
         profile.eAACStreamFormat = OMX_AUDIO_AACStreamFormatMP4FF;
-        err = mOMX->setParameter(mNode, OMX_IndexParamAudioAac,
+        err = mOMXNode->setParameter( OMX_IndexParamAudioAac,
                 &profile, sizeof(profile));
 
         if (err != OK) {
@@ -3372,8 +3349,8 @@ status_t OMXCodec::setAACFormat(
         InitOMXParams(&profile);
         profile.nPortIndex = kPortIndexInput;
 
-        status_t err = mOMX->getParameter(
-                mNode, OMX_IndexParamAudioAac, &profile, sizeof(profile));
+        status_t err = mOMXNode->getParameter(
+                OMX_IndexParamAudioAac, &profile, sizeof(profile));
         CHECK_EQ(err, (status_t)OK);
 
         profile.nChannels = numChannels;
@@ -3384,8 +3361,8 @@ status_t OMXCodec::setAACFormat(
                 ? OMX_AUDIO_AACStreamFormatMP4ADTS
                 : OMX_AUDIO_AACStreamFormatMP4FF;
 
-        err = mOMX->setParameter(
-                mNode, OMX_IndexParamAudioAac, &profile, sizeof(profile));
+        err = mOMXNode->setParameter(
+                OMX_IndexParamAudioAac, &profile, sizeof(profile));
 
         if (err != OK) {
             CODEC_LOGE("setParameter('OMX_IndexParamAudioAac') failed "
@@ -3403,8 +3380,7 @@ status_t OMXCodec::setAC3Format(int32_t numChannels, int32_t sampleRate) {
     InitOMXParams(&def);
     def.nPortIndex = kPortIndexInput;
 
-    status_t err = mOMX->getParameter(
-            mNode,
+    status_t err = mOMXNode->getParameter(
             (OMX_INDEXTYPE)OMX_IndexParamAudioAndroidAc3,
             &def,
             sizeof(def));
@@ -3416,8 +3392,7 @@ status_t OMXCodec::setAC3Format(int32_t numChannels, int32_t sampleRate) {
     def.nChannels = numChannels;
     def.nSampleRate = sampleRate;
 
-    return mOMX->setParameter(
-            mNode,
+    return mOMXNode->setParameter(
             (OMX_INDEXTYPE)OMX_IndexParamAudioAndroidAc3,
             &def,
             sizeof(def));
@@ -3434,11 +3409,11 @@ void OMXCodec::setImageOutputFormat(
 
 #if 0
     OMX_INDEXTYPE index;
-    status_t err = mOMX->get_extension_index(
-            mNode, "OMX.TI.JPEG.decode.Config.OutputColorFormat", &index);
+    status_t err = mOMXNode->get_extension_index(
+            "OMX.TI.JPEG.decode.Config.OutputColorFormat", &index);
     CHECK_EQ(err, (status_t)OK);
 
-    err = mOMX->set_config(mNode, index, &format, sizeof(format));
+    err = mOMXNode->set_config( index, &format, sizeof(format));
     CHECK_EQ(err, (status_t)OK);
 #endif
 
@@ -3446,8 +3421,8 @@ void OMXCodec::setImageOutputFormat(
     InitOMXParams(&def);
     def.nPortIndex = kPortIndexOutput;
 
-    status_t err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    status_t err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 
     CHECK_EQ((int)def.eDomain, (int)OMX_PortDomainImage);
@@ -3495,8 +3470,8 @@ void OMXCodec::setImageOutputFormat(
 
     def.nBufferCountActual = def.nBufferCountMin;
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->setParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 }
 
@@ -3506,8 +3481,8 @@ void OMXCodec::setJPEGInputFormat(
     InitOMXParams(&def);
     def.nPortIndex = kPortIndexInput;
 
-    status_t err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    status_t err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 
     CHECK_EQ((int)def.eDomain, (int)OMX_PortDomainImage);
@@ -3520,8 +3495,8 @@ void OMXCodec::setJPEGInputFormat(
     def.nBufferSize = compressedSize;
     def.nBufferCountActual = def.nBufferCountMin;
 
-    err = mOMX->setParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->setParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 }
 
@@ -3655,9 +3630,11 @@ status_t OMXCodec::stopOmxComponent_l() {
                 freeBuffersOnPort(kPortIndexOutput, true /* onlyThoseWeOwn */);
                 setState(LOADED);
                 break;
-            } else {
+            }
+#ifdef NOT_IMPLEMENTED
+            else {
                 OMX_STATETYPE state = OMX_StateInvalid;
-                status_t err = mOMX->getState(mNode, &state);
+                status_t err = mOMXNode->getState( &state);
                 CHECK_EQ(err, (status_t)OK);
 
                 if (state != OMX_StateExecuting) {
@@ -3667,6 +3644,9 @@ status_t OMXCodec::stopOmxComponent_l() {
             }
 
             isError = true;
+#else
+            break;
+#endif
         }
 
         case EXECUTING:
@@ -3695,7 +3675,7 @@ status_t OMXCodec::stopOmxComponent_l() {
                 mPortStatus[kPortIndexOutput] = SHUTTING_DOWN;
 
                 status_t err =
-                    mOMX->sendCommand(mNode, OMX_CommandStateSet, OMX_StateIdle);
+                    mOMXNode->sendCommand( OMX_CommandStateSet, OMX_StateIdle);
                 CHECK_EQ(err, (status_t)OK);
             }
 
@@ -3902,8 +3882,8 @@ void OMXCodec::dumpPortStatus(OMX_U32 portIndex) {
     InitOMXParams(&def);
     def.nPortIndex = portIndex;
 
-    status_t err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    status_t err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 
     printf("%s Port = {\n", portIndex == kPortIndexInput ? "Input" : "Output");
@@ -3968,8 +3948,8 @@ void OMXCodec::dumpPortStatus(OMX_U32 portIndex) {
                 InitOMXParams(&params);
                 params.nPortIndex = portIndex;
 
-                err = mOMX->getParameter(
-                        mNode, OMX_IndexParamAudioPcm, &params, sizeof(params));
+                err = mOMXNode->getParameter(
+                        OMX_IndexParamAudioPcm, &params, sizeof(params));
                 CHECK_EQ(err, (status_t)OK);
 
                 printf("  nSamplingRate = %" PRIu32 "\n", params.nSamplingRate);
@@ -3987,8 +3967,8 @@ void OMXCodec::dumpPortStatus(OMX_U32 portIndex) {
                 InitOMXParams(&amr);
                 amr.nPortIndex = portIndex;
 
-                err = mOMX->getParameter(
-                        mNode, OMX_IndexParamAudioAmr, &amr, sizeof(amr));
+                err = mOMXNode->getParameter(
+                        OMX_IndexParamAudioAmr, &amr, sizeof(amr));
                 CHECK_EQ(err, (status_t)OK);
 
                 printf("  nChannels = %" PRIu32 "\n", amr.nChannels);
@@ -4012,19 +3992,22 @@ void OMXCodec::dumpPortStatus(OMX_U32 portIndex) {
 }
 
 status_t OMXCodec::initNativeWindow() {
+#if 0
     // Enable use of a GraphicBuffer as the output for this node.  This must
     // happen before getting the IndexParamPortDefinition parameter because it
     // will affect the pixel format that the node reports.
-    status_t err = mOMX->enableNativeBuffers(mNode, kPortIndexOutput, OMX_TRUE /* graphic */,
+    status_t err = mOMXNode->enableNativeBuffers( kPortIndexOutput, OMX_TRUE /* graphic */,
 		 OMX_TRUE /* enable */);
     if (err != 0) {
         return err;
     }
 
     return OK;
+#endif
 }
 
 void OMXCodec::initNativeWindowCrop() {
+#if 0
     int32_t left, top, right, bottom;
 
     CHECK(mOutputFormat->findRect(
@@ -4040,6 +4023,7 @@ void OMXCodec::initNativeWindowCrop() {
     // We'll ignore any errors here, if the surface is
     // already invalid, we'll know soon enough.
     native_window_set_crop(mNativeWindow.get(), &crop);
+#endif
 }
 
 void OMXCodec::initOutputFormat(const sp<MetaData> &inputFormat) {
@@ -4056,8 +4040,8 @@ void OMXCodec::initOutputFormat(const sp<MetaData> &inputFormat) {
     InitOMXParams(&def);
     def.nPortIndex = kPortIndexOutput;
 
-    status_t err = mOMX->getParameter(
-            mNode, OMX_IndexParamPortDefinition, &def, sizeof(def));
+    status_t err = mOMXNode->getParameter(
+            OMX_IndexParamPortDefinition, &def, sizeof(def));
     CHECK_EQ(err, (status_t)OK);
 
     switch (def.eDomain) {
@@ -4083,8 +4067,8 @@ void OMXCodec::initOutputFormat(const sp<MetaData> &inputFormat) {
                 InitOMXParams(&params);
                 params.nPortIndex = kPortIndexOutput;
 
-                err = mOMX->getParameter(
-                        mNode, OMX_IndexParamAudioPcm, &params, sizeof(params));
+                err = mOMXNode->getParameter(
+                        OMX_IndexParamAudioPcm, &params, sizeof(params));
                 CHECK_EQ(err, (status_t)OK);
 
                 CHECK_EQ((int)params.eNumData, (int)OMX_NumericalDataSigned);
@@ -4127,8 +4111,8 @@ void OMXCodec::initOutputFormat(const sp<MetaData> &inputFormat) {
                 InitOMXParams(&amr);
                 amr.nPortIndex = kPortIndexOutput;
 
-                err = mOMX->getParameter(
-                        mNode, OMX_IndexParamAudioAmr, &amr, sizeof(amr));
+                err = mOMXNode->getParameter(
+                        OMX_IndexParamAudioAmr, &amr, sizeof(amr));
                 CHECK_EQ(err, (status_t)OK);
 
                 CHECK_EQ(amr.nChannels, 1u);
@@ -4203,8 +4187,8 @@ void OMXCodec::initOutputFormat(const sp<MetaData> &inputFormat) {
                 InitOMXParams(&rect);
                 rect.nPortIndex = kPortIndexOutput;
                 status_t err =
-                        mOMX->getConfig(
-                            mNode, OMX_IndexConfigCommonOutputCrop,
+                        mOMXNode->getConfig(
+                            OMX_IndexConfigCommonOutputCrop,
                             &rect, sizeof(rect));
 
                 CODEC_LOGI("video dimensions are %u x %u",
@@ -4234,10 +4218,11 @@ void OMXCodec::initOutputFormat(const sp<MetaData> &inputFormat) {
                             video_def->nFrameWidth - 1,
                             video_def->nFrameHeight - 1);
                 }
-
+#if 0
                 if (mNativeWindow != NULL) {
                      initNativeWindowCrop();
                 }
+#endif
             }
             break;
         }
@@ -4267,7 +4252,7 @@ status_t OMXCodec::pause() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
+#if 0
 status_t QueryCodecs(
         const sp<IOMX> &omx,
         const char *mime, bool queryDecoders, bool hwCodecOnly,
@@ -4306,15 +4291,14 @@ status_t QueryCodec(
     bool isVideo = !strncasecmp(mime, "video/", 6);
 
     sp<OMXCodecObserver> observer = new OMXCodecObserver;
-    IOMX::node_id node;
-    status_t err = omx->allocateNode(componentName, observer,
-			NULL /* nodeBinder */, &node);
+    sp<IOMXNode> OMXNode;
+    status_t err = omx->allocateNode(componentName, observer, &OMXNode);
 
     if (err != OK) {
         return err;
     }
 
-    OMXCodec::setComponentRole(omx, node, isEncoder, mime);
+    OMXCodec::setComponentRole(OMXNode, isEncoder, mime);
 
     caps->mFlags = 0;
     caps->mComponentName = componentName;
@@ -4326,8 +4310,8 @@ status_t QueryCodec(
         param.nPortIndex = !isEncoder ? 0 : 1;
 
         for (param.nProfileIndex = 0;; ++param.nProfileIndex) {
-            err = omx->getParameter(
-                    node, OMX_IndexParamVideoProfileLevelQuerySupported,
+            err = node->getParameter(
+                    OMX_IndexParamVideoProfileLevelQuerySupported,
                     &param, sizeof(param));
 
             if (err != OK) {
@@ -4348,8 +4332,8 @@ status_t QueryCodec(
         InitOMXParams(&portFormat);
         portFormat.nPortIndex = !isEncoder ? 1 : 0;
         for (portFormat.nIndex = 0;; ++portFormat.nIndex)  {
-            err = omx->getParameter(
-                    node, OMX_IndexParamVideoPortFormat,
+            err = node->getParameter(
+                    OMX_IndexParamVideoPortFormat,
                     &portFormat, sizeof(portFormat));
             if (err != OK) {
                 break;
@@ -4378,8 +4362,8 @@ status_t QueryCodec(
         InitOMXParams(&param);
         param.nPortIndex = isEncoder ? 1 : 0;
         for (param.nProfileIndex = 0;; ++param.nProfileIndex) {
-            err = omx->getParameter(
-                    node, (OMX_INDEXTYPE)OMX_IndexParamAudioProfileQuerySupported,
+            err = node->getParameter(
+                    (OMX_INDEXTYPE)OMX_IndexParamAudioProfileQuerySupported,
                     &param, sizeof(param));
 
             if (err != OK) {
@@ -4402,16 +4386,16 @@ status_t QueryCodec(
     }
 
     if (isVideo && !isEncoder) {
-        if (omx->storeMetaDataInBuffers(
-                    node, 1 /* port index */, OMX_TRUE) == OK ||
-            omx->prepareForAdaptivePlayback(
-                    node, 1 /* port index */, OMX_TRUE,
+        if (node->storeMetaDataInBuffers(
+                    1 /* port index */, OMX_TRUE) == OK ||
+            node->prepareForAdaptivePlayback(
+                    1 /* port index */, OMX_TRUE,
                     1280 /* width */, 720 /* height */) == OK) {
             caps->mFlags |= CodecCapabilities::kFlagSupportsAdaptivePlayback;
         }
     }
 
-    CHECK_EQ(omx->freeNode(node), (status_t)OK);
+    CHECK_EQ(node->freeNode(), (status_t)OK);
 
     return OK;
 }
@@ -4422,5 +4406,5 @@ status_t QueryCodecs(
         Vector<CodecCapabilities> *results) {
     return QueryCodecs(omx, mimeType, queryDecoders, false /*hwCodecOnly*/, results);
 }
-
+#endif
 }  // namespace android

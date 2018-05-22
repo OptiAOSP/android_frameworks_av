@@ -51,6 +51,7 @@ cc_library_shared {
         "NuCachedSource2.cpp",
         "NuMediaExtractor.cpp",
         "OMXClient.cpp",
+        "OMXCodec.cpp",
         "OmxInfoBuilder.cpp",
         "OggExtractor.cpp",
         "SampleIterator.cpp",
