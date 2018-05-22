@@ -45,10 +45,6 @@
 
 #include <hidlmemory/mapping.h>
 
-#ifdef STE_HARDWARE
-#define LOG_DEBUG 1
-#endif
-
 static const OMX_U32 kPortIndexInput = 0;
 static const OMX_U32 kPortIndexOutput = 1;
 
@@ -392,11 +388,7 @@ OMXNodeInstance::OMXNodeInstance(
     mGraphicBufferEnabled[0] = false;
     mGraphicBufferEnabled[1] = false;
     mIsSecure = AString(name).endsWith(".secure");
-#ifdef STE_HARDWARE
-    mLegacyAdaptiveExperiment = false;
-#else
     mLegacyAdaptiveExperiment = ADebug::isExperimentEnabled("legacy-adaptive");
-#endif
 }
 
 OMXNodeInstance::~OMXNodeInstance() {
@@ -772,6 +764,8 @@ status_t OMXNodeInstance::setPortMode(OMX_U32 portIndex, IOMX::PortMode mode) {
 
             CLOG_INTERNAL(setPortMode, "Legacy adaptive experiment: "
                     "unable to enable metadata mode on output");
+
+            mLegacyAdaptiveExperiment = false;
         }
 
         // Disable secure buffer and enable graphic buffer
@@ -1078,9 +1072,6 @@ status_t OMXNodeInstance::useBuffer(
         return BAD_VALUE;
     }
 
-#if defined(STE_HARDWARE) && defined(LOG_DEBUG)
-    ALOGD("%s: omxBuffer.mBufferType = %d", __func__, omxBuffer.mBufferType);
-#endif
     switch (omxBuffer.mBufferType) {
         case OMXBuffer::kBufferTypePreset:
             return useBuffer_l(portIndex, NULL, NULL, buffer);
@@ -1089,9 +1080,6 @@ status_t OMXNodeInstance::useBuffer(
             return useBuffer_l(portIndex, omxBuffer.mMem, NULL, buffer);
 
         case OMXBuffer::kBufferTypeANWBuffer:
-#ifdef STE_HARDWARE
-            mMetadataType[portIndex] = kMetadataBufferTypeInvalid;
-#endif
             return useGraphicBuffer_l(portIndex, omxBuffer.mGraphicBuffer, buffer);
 
         case OMXBuffer::kBufferTypeHidlMemory: {
