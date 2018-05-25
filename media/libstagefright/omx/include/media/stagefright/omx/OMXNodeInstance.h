@@ -59,6 +59,9 @@ struct OMXNodeInstance : public BnOMXNode {
 
     status_t setPortMode(OMX_U32 port_index, IOMX::PortMode mode);
 
+    status_t storeMetaDataInBuffers(
+        OMX_U32 port_index, OMX_BOOL enable, int32_t *type);
+
     status_t getGraphicBufferUsage(OMX_U32 portIndex, OMX_U32* usage);
 
     status_t prepareForAdaptivePlayback(

@@ -47,6 +47,7 @@ enum {
     GET_CONFIG,
     SET_CONFIG,
     SET_PORT_MODE,
+    STORE_META_DATA_IN_BUFFERS,
     SET_INPUT_SURFACE,
     PREPARE_FOR_ADAPTIVE_PLAYBACK,
     ALLOC_SECURE_BUFFER,
@@ -233,6 +234,25 @@ public:
         data.writeInt32(port_index);
         data.writeInt32(mode);
         remote()->transact(SET_PORT_MODE, data, &reply);
+
+        return reply.readInt32();
+    }
+
+    virtual status_t storeMetaDataInBuffers(
+            OMX_U32 port_index, OMX_BOOL enable, int32_t *type) {
+        Parcel data, reply;
+        data.writeInterfaceToken(IOMXNode::getInterfaceDescriptor());
+        data.writeInt32(port_index);
+        data.writeInt32((int32_t)enable);
+        data.writeInt32(type == NULL ? kMetadataBufferTypeANWBuffer : *type);
+
+        remote()->transact(STORE_META_DATA_IN_BUFFERS, data, &reply);
+
+        // read type even storeMetaDataInBuffers failed
+        int negotiatedType = reply.readInt32();
+        if (type != NULL) {
+            *type = (MetadataBufferType)negotiatedType;
+        }
 
         return reply.readInt32();
     }
@@ -486,6 +506,11 @@ public:
     virtual status_t setPortMode(
             OMX_U32 port_index, IOMX::PortMode mode) {
         return mBase->setPortMode(port_index, mode);
+    }
+
+    virtual status_t storeMetaDataInBuffers(
+           OMX_U32 portIndex, OMX_BOOL enable, int32_t *type) {
+       return mBase->storeMetaDataInBuffers(portIndex, enable, type);
     }
 
     virtual status_t prepareForAdaptivePlayback(
@@ -758,6 +783,17 @@ status_t BnOMXNode::onTransact(
             OMX_U32 port_index = data.readInt32();
             IOMX::PortMode mode = (IOMX::PortMode) data.readInt32();
             reply->writeInt32(setPortMode(port_index, mode));
+
+            return NO_ERROR;
+        }
+
+        case STORE_META_DATA_IN_BUFFERS:
+        {
+            CHECK_OMX_INTERFACE(IOMXNode, data, reply);
+            OMX_U32 port_index = data.readInt32();
+            OMX_BOOL enable = (OMX_BOOL)data.readInt32();
+            int32_t type = data.readInt32();
+            reply->writeInt32(storeMetaDataInBuffers(port_index, enable, &type));
 
             return NO_ERROR;
         }

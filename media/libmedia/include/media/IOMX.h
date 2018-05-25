@@ -109,6 +109,11 @@ public:
     virtual status_t setConfig(
             OMX_INDEXTYPE index, const void *params, size_t size) = 0;
 
+    // This will set *type to previous metadata buffer type on OMX error (not on binder error), and
+    // new metadata buffer type on success.
+    virtual status_t storeMetaDataInBuffers(
+            OMX_U32 port_index, OMX_BOOL enable, int32_t *type = NULL) = 0;
+
     virtual status_t setPortMode(
             OMX_U32 port_index, IOMX::PortMode mode) = 0;
 
