@@ -75,6 +75,8 @@ struct LWOmxNode : public BnOMXNode {
             OMX_INDEXTYPE index, const void *params, size_t size) override;
     status_t setPortMode(
             OMX_U32 port_index, IOMX::PortMode mode) override;
+    status_t storeMetaDataInBuffers(
+            OMX_U32 port_index, OMX_BOOL enable, int32_t *type) override;
     status_t prepareForAdaptivePlayback(
             OMX_U32 portIndex, OMX_BOOL enable,
             OMX_U32 maxFrameWidth, OMX_U32 maxFrameHeight) override;
@@ -122,6 +124,7 @@ struct TWOmxNode : public IOmxNode {
     Return<Status> setConfig(
             uint32_t index, hidl_vec<uint8_t> const& config) override;
     Return<Status> setPortMode(uint32_t portIndex, PortMode mode) override;
+    Return<Status> storeMetaDataInBuffers(uint32_t portIndex, bool enable, int32_t type) override;
     Return<Status> prepareForAdaptivePlayback(
             uint32_t portIndex, bool enable,
             uint32_t maxFrameWidth, uint32_t maxFrameHeight) override;

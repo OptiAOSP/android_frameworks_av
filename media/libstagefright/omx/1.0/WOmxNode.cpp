@@ -97,6 +97,10 @@ status_t LWOmxNode::setPortMode(
     return toStatusT(mBase->setPortMode(port_index, toHardwarePortMode(mode)));
 }
 
+status_t LWOmxNode::storeMetaDataInBuffers(OMX_U32 port_index, OMX_BOOL enable, int32_t *type) {
+    return toStatusT(mBase->storeMetaDataInBuffers(port_index, toRawBool(enable), *type));
+}
+
 status_t LWOmxNode::prepareForAdaptivePlayback(
         OMX_U32 portIndex, OMX_BOOL enable,
         OMX_U32 maxFrameWidth, OMX_U32 maxFrameHeight) {
@@ -301,6 +305,11 @@ Return<Status> TWOmxNode::setConfig(
 
 Return<Status> TWOmxNode::setPortMode(uint32_t portIndex, PortMode mode) {
     return toStatus(mBase->setPortMode(portIndex, toIOMXPortMode(mode)));
+}
+
+Return<Status> TWOmxNode::storeMetaDataInBuffers(uint32_t portIndex, bool enable, int32_t type) {
+    int32_t lType = type;
+    return toStatus(mBase->storeMetaDataInBuffers(portIndex, toEnumBool(enable), &lType));
 }
 
 Return<Status> TWOmxNode::prepareForAdaptivePlayback(
