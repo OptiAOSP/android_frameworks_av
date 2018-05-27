@@ -728,11 +728,7 @@ status_t OMXNodeInstance::setPortMode(OMX_U32 portIndex, IOMX::PortMode mode) {
             }
         }
         (void)enableNativeBuffers_l(portIndex, OMX_FALSE /*graphic*/, OMX_FALSE);
-#ifdef STE_HARDWARE
-        return storeMetaDataInBuffers_l(portIndex, OMX_FALSE, NULL);
-#else
         return storeMetaDataInBuffers_l(portIndex, OMX_TRUE, NULL);
-#endif
     }
 
     case IOMX::kPortModeDynamicNativeHandle:
