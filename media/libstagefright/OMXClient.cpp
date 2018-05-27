@@ -25,7 +25,7 @@
 #include <cutils/properties.h>
 
 #include <binder/IServiceManager.h>
-#include <media/IMediaCodecService.h>
+#include <media/IMediaPlayerService.h>
 #include <media/stagefright/OMXClient.h>
 
 #include <media/IOMX.h>
@@ -69,15 +69,15 @@ status_t OMXClient::connect(const char* name, bool* trebleFlag) {
 
 status_t OMXClient::connectLegacy() {
     sp<IServiceManager> sm = defaultServiceManager();
-    sp<IBinder> codecbinder = sm->getService(String16("media.codec"));
-    sp<IMediaCodecService> codecservice = interface_cast<IMediaCodecService>(codecbinder);
+    sp<IBinder> binder = sm->getService(String16("media.player"));
+    sp<IMediaPlayerService> service = interface_cast<IMediaPlayerService>(binder);
 
-    if (codecservice.get() == NULL) {
-        ALOGE("Cannot obtain IMediaCodecService");
+    if (service.get() == NULL) {
+        ALOGE("Cannot obtain IMediaPlayerService");
         return NO_INIT;
     }
 
-    mOMX = codecservice->getOMX();
+    mOMX = service->getOMX();
     if (mOMX.get() == NULL) {
         ALOGE("Cannot obtain mediacodec IOMX");
         return NO_INIT;
