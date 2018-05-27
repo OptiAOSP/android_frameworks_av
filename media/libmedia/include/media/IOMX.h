@@ -140,6 +140,30 @@ public:
             OMX_U32 port_index, size_t size, buffer_id *buffer,
             void **buffer_data, sp<NativeHandle> *native_handle) = 0;
 
+
+    virtual status_t allocateBufferWithBackup(
+            OMX_U32 port_index, const sp<IMemory> &params,
+            buffer_id *buffer, OMX_U32 allottedSize) = 0;
+    // Calls OMX_FillBuffer on buffer, and passes |fenceFd| to component if it supports
+    // fences. Otherwise, it waits on |fenceFd| before calling OMX_FillBuffer.
+    // Takes ownership of |fenceFd| even if this call fails.
+    virtual status_t fillBuffer_legacy(buffer_id buffer, int fenceFd = -1) = 0;
+
+    // Calls OMX_EmptyBuffer on buffer (after updating buffer header with |range_offset|,
+    // |range_length|, |flags| and |timestamp|). Passes |fenceFd| to component if it
+    // supports fences. Otherwise, it waits on |fenceFd| before calling OMX_EmptyBuffer.
+    // Takes ownership of |fenceFd| even if this call fails.
+    virtual status_t emptyBuffer_legacy(
+            buffer_id buffer,
+            OMX_U32 range_offset, OMX_U32 range_length,
+            OMX_U32 flags, OMX_TICKS timestamp, int fenceFd = -1) = 0;
+
+
+    // Use |params| as an OMX buffer, but limit the size of the OMX buffer to |allottedSize|.
+    virtual status_t useBuffer_legacy(
+            OMX_U32 port_index, const sp<IMemory> &params,
+            buffer_id *buffer, OMX_U32 allottedSize) = 0;
+
     // Instructs the component to use the buffer passed in via |omxBuf| on the
     // specified port. Returns in |*buffer| the buffer id that the component
     // assigns to this buffer. |omxBuf| must be one of:

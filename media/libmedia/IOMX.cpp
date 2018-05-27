@@ -55,6 +55,10 @@ enum {
     FREE_BUFFER,
     FILL_BUFFER,
     EMPTY_BUFFER,
+    ALLOC_BUFFER_WITH_BACKUP,
+    USE_BUFFER_LEGACY,
+    FILL_BUFFER_LEGACY,
+    EMPTY_BUFFER_LEGACY,
     GET_EXTENSION_INDEX,
     OBSERVER_ON_MSG,
     GET_GRAPHIC_BUFFER_USAGE,
@@ -424,6 +428,83 @@ public:
         return reply.readInt32();
     }
 
+    virtual status_t useBuffer_legacy(
+            OMX_U32 port_index, const sp<IMemory> &params,
+            buffer_id *buffer, OMX_U32 allottedSize) {
+        Parcel data, reply;
+        data.writeInterfaceToken(IOMXNode::getInterfaceDescriptor());
+        data.writeInt32(port_index);
+        data.writeStrongBinder(IInterface::asBinder(params));
+        data.writeInt32(allottedSize);
+        remote()->transact(USE_BUFFER_LEGACY, data, &reply);
+
+        status_t err = reply.readInt32();
+        if (err != OK) {
+            *buffer = 0;
+
+            return err;
+        }
+
+        *buffer = (buffer_id)reply.readInt32();
+
+        return err;
+    }
+
+    virtual status_t allocateBufferWithBackup(
+            OMX_U32 port_index, const sp<IMemory> &params,
+            buffer_id *buffer, OMX_U32 allottedSize) {
+        Parcel data, reply;
+        data.writeInterfaceToken(IOMXNode::getInterfaceDescriptor());
+        data.writeInt32(port_index);
+        data.writeStrongBinder(IInterface::asBinder(params));
+        data.writeInt32(allottedSize);
+        remote()->transact(ALLOC_BUFFER_WITH_BACKUP, data, &reply);
+
+        status_t err = reply.readInt32();
+        if (err != OK) {
+            *buffer = 0;
+
+            return err;
+        }
+
+        *buffer = (buffer_id)reply.readInt32();
+
+        return err;
+    }
+
+    virtual status_t fillBuffer_legacy(buffer_id buffer, int fenceFd) {
+        Parcel data, reply;
+        data.writeInterfaceToken(IOMXNode::getInterfaceDescriptor());
+        data.writeInt32((int32_t)buffer);
+        data.writeInt32(fenceFd >= 0);
+        if (fenceFd >= 0) {
+            data.writeFileDescriptor(fenceFd, true /* takeOwnership */);
+        }
+        remote()->transact(FILL_BUFFER_LEGACY, data, &reply);
+
+        return reply.readInt32();
+    }
+
+    virtual status_t emptyBuffer_legacy(
+            buffer_id buffer,
+            OMX_U32 range_offset, OMX_U32 range_length,
+            OMX_U32 flags, OMX_TICKS timestamp, int fenceFd) {
+        Parcel data, reply;
+        data.writeInterfaceToken(IOMXNode::getInterfaceDescriptor());
+        data.writeInt32((int32_t)buffer);
+        data.writeInt32(range_offset);
+        data.writeInt32(range_length);
+        data.writeInt32(flags);
+        data.writeInt64(timestamp);
+        data.writeInt32(fenceFd >= 0);
+        if (fenceFd >= 0) {
+            data.writeFileDescriptor(fenceFd, true /* takeOwnership */);
+        }
+        remote()->transact(EMPTY_BUFFER_LEGACY, data, &reply);
+
+        return reply.readInt32();
+    }
+
     virtual status_t getExtensionIndex(
             const char *parameter_name,
             OMX_INDEXTYPE *index) {
@@ -563,6 +644,30 @@ public:
             buffer_id buffer, const OMXBuffer &omxBuf,
             OMX_U32 flags, OMX_TICKS timestamp, int fenceFd = -1) {
         return mBase->emptyBuffer(buffer, omxBuf, flags, timestamp, fenceFd);
+    }
+
+    virtual status_t useBuffer_legacy(
+            OMX_U32 port_index, const sp<IMemory> &params,
+            buffer_id *buffer, OMX_U32 allottedSize) {
+        return mBase->useBuffer_legacy(port_index, params, buffer, allottedSize);
+    }
+
+    virtual status_t allocateBufferWithBackup(
+            OMX_U32 port_index, const sp<IMemory> &params,
+            buffer_id *buffer, OMX_U32 allottedSize) {
+        return mBase->allocateBufferWithBackup(port_index, params, buffer, allottedSize);
+    }
+
+    virtual status_t fillBuffer_legacy(buffer_id buffer, int fenceFd) {
+        return mBase->fillBuffer_legacy(buffer, fenceFd);
+    }
+
+    virtual status_t emptyBuffer_legacy(
+            buffer_id buffer,
+            OMX_U32 range_offset, OMX_U32 range_length,
+            OMX_U32 flags, OMX_TICKS timestamp, int fenceFd) {
+        return mBase->emptyBuffer_legacy(buffer, range_offset,
+                range_length, flags, timestamp, fenceFd);
     }
 
     virtual status_t getExtensionIndex(
@@ -831,6 +936,89 @@ status_t BnOMXNode::onTransact(
             if (err == OK) {
                 reply->writeInt32((int32_t)buffer);
             }
+
+            return NO_ERROR;
+        }
+
+        case USE_BUFFER_LEGACY:
+        {
+            CHECK_OMX_INTERFACE(IOMXNode, data, reply);
+
+            OMX_U32 port_index = data.readInt32();
+            sp<IMemory> params =
+                interface_cast<IMemory>(data.readStrongBinder());
+            OMX_U32 allottedSize = data.readInt32();
+
+            if (params == NULL) {
+                ALOGE("b/26392700");
+                reply->writeInt32(INVALID_OPERATION);
+                return NO_ERROR;
+            }
+
+            buffer_id buffer;
+            status_t err = useBuffer_legacy(port_index, params, &buffer, allottedSize);
+            reply->writeInt32(err);
+
+            if (err == OK) {
+                reply->writeInt32((int32_t)buffer);
+            }
+
+            return NO_ERROR;
+        }
+
+        case ALLOC_BUFFER_WITH_BACKUP:
+        {
+            CHECK_OMX_INTERFACE(IOMXNode, data, reply);
+
+            OMX_U32 port_index = data.readInt32();
+            sp<IMemory> params =
+                interface_cast<IMemory>(data.readStrongBinder());
+            OMX_U32 allottedSize = data.readInt32();
+
+            if (params == NULL) {
+                ALOGE("b/26392700");
+                reply->writeInt32(INVALID_OPERATION);
+                return NO_ERROR;
+            }
+
+            buffer_id buffer;
+            status_t err = allocateBufferWithBackup(
+                      port_index, params, &buffer, allottedSize);
+
+            reply->writeInt32(err);
+
+            if (err == OK) {
+                reply->writeInt32((int32_t)buffer);
+            }
+
+            return NO_ERROR;
+        }
+
+        case FILL_BUFFER_LEGACY:
+        {
+            CHECK_OMX_INTERFACE(IOMXNode, data, reply);
+
+            buffer_id buffer = (buffer_id)data.readInt32();
+            bool haveFence = data.readInt32();
+            int fenceFd = haveFence ? ::dup(data.readFileDescriptor()) : -1;
+            reply->writeInt32(fillBuffer_legacy(buffer, fenceFd));
+
+            return NO_ERROR;
+        }
+
+        case EMPTY_BUFFER_LEGACY:
+        {
+            CHECK_OMX_INTERFACE(IOMXNode, data, reply);
+
+            buffer_id buffer = (buffer_id)data.readInt32();
+            OMX_U32 range_offset = data.readInt32();
+            OMX_U32 range_length = data.readInt32();
+            OMX_U32 flags = data.readInt32();
+            OMX_TICKS timestamp = data.readInt64();
+            bool haveFence = data.readInt32();
+            int fenceFd = haveFence ? ::dup(data.readFileDescriptor()) : -1;
+            reply->writeInt32(emptyBuffer_legacy(
+                    buffer, range_offset, range_length, flags, timestamp, fenceFd));
 
             return NO_ERROR;
         }
