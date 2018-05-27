@@ -738,11 +738,7 @@ status_t OMXNodeInstance::setPortMode(OMX_U32 portIndex, IOMX::PortMode mode) {
             }
         }
         (void)enableNativeBuffers_l(portIndex, OMX_FALSE /*graphic*/, OMX_FALSE);
-#ifdef STE_HARDWARE
-        return storeMetaDataInBuffers_l(portIndex, OMX_FALSE, NULL);
-#else
         return storeMetaDataInBuffers_l(portIndex, OMX_TRUE, NULL);
-#endif
     }
 
     case IOMX::kPortModeDynamicNativeHandle:
@@ -1034,6 +1030,10 @@ status_t OMXNodeInstance::storeMetaDataInBuffers_l(
                 requestedType == kMetadataBufferTypeANWBuffer
                         ? kMetadataBufferTypeGrallocSource : requestedType;
             err = OMX_SetParameter(mHandle, index, &params);
+        }
+
+        if (err == OMX_ErrorBadParameter) {
+            err = OMX_ErrorUnsupportedIndex;
         }
     }
 
