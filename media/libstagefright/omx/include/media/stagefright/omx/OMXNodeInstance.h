@@ -238,6 +238,10 @@ private:
             OMX_U32 portIndex, const sp<GraphicBuffer> &graphicBuffer,
             IOMX::buffer_id *buffer);
 
+    status_t emptyBuffer_l_legacy(
+        OMX_BUFFERHEADERTYPE *header, OMX_U32 flags, OMX_TICKS timestamp,
+        intptr_t debugAddr, int fenceFd);
+
     status_t emptyBuffer_l(
             IOMX::buffer_id buffer,
             OMX_U32 rangeOffset, OMX_U32 rangeLength,

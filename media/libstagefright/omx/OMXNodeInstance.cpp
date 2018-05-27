@@ -151,9 +151,10 @@ struct BufferMeta {
         }
 
         // check component returns proper range
-        sp<ABuffer> codec = getBuffer(header, true /* limit */);
+        sp<ABuffer> codec = getBuffer(header, false /* backup */,
+                !(header->nFlags & OMX_BUFFERFLAG_EXTRADATA));
 
-        memcpy(getPointer() + header->nOffset, codec->data(), codec->size());
+        memcpy((OMX_U8 *)mMem->pointer() + header->nOffset, codec->data(), codec->size());
     }
 
     void CopyToOMX(const OMX_BUFFERHEADERTYPE *header) {
@@ -161,9 +162,11 @@ struct BufferMeta {
             return;
         }
 
+        size_t bytesToCopy = header->nFlags & OMX_BUFFERFLAG_EXTRADATA ?
+            header->nAllocLen - header->nOffset : header->nFilledLen;
         memcpy(header->pBuffer + header->nOffset,
-                getPointer() + header->nOffset,
-                header->nFilledLen);
+                (const OMX_U8 *)mMem->pointer() + header->nOffset,
+                bytesToCopy);
     }
 
     // return the codec buffer
@@ -1729,6 +1732,46 @@ status_t OMXNodeInstance::fillBuffer_legacy(IOMX::buffer_id buffer, int fenceFd)
     return StatusFromOMXError(err);
 }
 
+status_t OMXNodeInstance::emptyBuffer_l_legacy(
+        OMX_BUFFERHEADERTYPE *header, OMX_U32 flags, OMX_TICKS timestamp,
+        intptr_t debugAddr, int fenceFd) {
+    header->nFlags = flags;
+    header->nTimeStamp = timestamp;
+
+    status_t res = storeFenceInMeta_l(header, fenceFd, kPortIndexInput);
+    if (res != OK) {
+        CLOG_ERROR(emptyBuffer::storeFenceInMeta, res, WITH_STATS(
+                FULL_BUFFER(debugAddr, header, fenceFd)));
+        return res;
+    }
+
+    {
+        Mutex::Autolock _l(mDebugLock);
+        mInputBuffersWithCodec.add(header);
+
+        // bump internal-state debug level for 2 input frames past a buffer with CSD
+        if ((flags & OMX_BUFFERFLAG_CODECCONFIG) != 0) {
+            bumpDebugLevel_l(2 /* numInputBuffers */, 0 /* numOutputBuffers */);
+        }
+
+        CLOG_BUMPED_BUFFER(emptyBuffer, WITH_STATS(FULL_BUFFER(debugAddr, header, fenceFd)));
+    }
+
+    OMX_ERRORTYPE err = OMX_EmptyThisBuffer(mHandle, header);
+    CLOG_IF_ERROR(emptyBuffer, err, FULL_BUFFER(debugAddr, header, fenceFd));
+
+    {
+        Mutex::Autolock _l(mDebugLock);
+        if (err != OMX_ErrorNone) {
+            mInputBuffersWithCodec.remove(header);
+        } else if (!(flags & OMX_BUFFERFLAG_CODECCONFIG)) {
+            unbumpDebugLevel_l(kPortIndexInput);
+        }
+    }
+
+    return StatusFromOMXError(err);
+}
+
 status_t OMXNodeInstance::emptyBuffer_legacy(
         IOMX::buffer_id buffer,
         OMX_U32 rangeOffset, OMX_U32 rangeLength,
@@ -1790,7 +1833,7 @@ status_t OMXNodeInstance::emptyBuffer_legacy(
 
         buffer_meta->CopyToOMX(header);
     }
-    return emptyBuffer_l(header, flags, timestamp, (intptr_t)buffer, fenceFd);
+    return emptyBuffer_l_legacy(header, flags, timestamp, (intptr_t)buffer, fenceFd);
 }
 
 status_t OMXNodeInstance::useBuffer_legacy(
