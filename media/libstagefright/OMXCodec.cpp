@@ -798,6 +798,10 @@ static size_t getFrameSize(
         case OMX_COLOR_FormatYUV420Planar:
         case OMX_COLOR_FormatYUV420SemiPlanar:
         case OMX_TI_COLOR_FormatYUV420PackedSemiPlanar:
+#ifdef STE_HARDWARE
+        case OMX_STE_COLOR_FormatYUV420PackedSemiPlanarMB:
+#endif
+
         /*
         * FIXME: For the Opaque color format, the frame size does not
         * need to be (w*h*3)/2. It just needs to
@@ -1557,8 +1561,18 @@ status_t OMXCodec::init() {
     CHECK_EQ((int)mState, (int)LOADED);
 
     status_t err;
+#ifdef STE_HARDWARE
+   // if (!mCodec->mComponentName.compare("OMX.ST.VFM.MPEG4Enc") ||
+   //     !mCodec->mComponentName.compare("OMX.ST.VFM.H264Enc")) {
+        err = mOMXNode->storeMetaDataInBuffers(kPortIndexInput, OMX_TRUE);
+        if (err != OK) {
+            ALOGE("Storing meta data in video buffers is not supported");
+            return err;
+        }
+   // }
+#endif
     if (!(mQuirks & kRequiresLoadedToIdleAfterAllocation)) {
-        err = mOMXNode->sendCommand( OMX_CommandStateSet, OMX_StateIdle);
+        err = mOMXNode->sendCommand(OMX_CommandStateSet, OMX_StateIdle);
         CHECK_EQ(err, (status_t)OK);
         setState(LOADED_TO_IDLE);
     }
@@ -1616,21 +1630,26 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
     }
 
     status_t err = OK;
+#if 0
+#ifdef STE_HARDWARE
+    if (!(mQuirks & kRequiresStoreMetaDataBeforeIdle)
+            && (mFlags & kStoreMetaDataInVideoBuffers)
+#else
     if ((mFlags & kStoreMetaDataInVideoBuffers)
+#endif
             && portIndex == kPortIndexInput) {
-        err = mOMXNode->storeMetaDataInBuffers( kPortIndexInput, OMX_TRUE);
+        err = mOMXNode->storeMetaDataInBuffers(kPortIndexInput, OMX_TRUE);
         if (err != OK) {
             ALOGE("Storing meta data in video buffers is not supported");
             return err;
         }
     }
-
+#endif
     OMX_PARAM_PORTDEFINITIONTYPE def;
     InitOMXParams(&def);
     def.nPortIndex = portIndex;
 
-    err = mOMXNode->getParameter(
-            OMX_IndexParamPortDefinition, &def, sizeof(def));
+    err = mOMXNode->getParameter(OMX_IndexParamPortDefinition, &def, sizeof(def));
 
     if (err != OK) {
         return err;
@@ -1790,7 +1809,7 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
             mNativeWindow.get(),
             def.format.video.nFrameWidth,
             def.format.video.nFrameHeight,
-            def.format.video.eColorFormat,
+            ACodec::OmxToHALFormat(def.format.video.eColorFormat)
             rotationDegrees,
             usage | GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP,
             false /* reconnect */);
@@ -1820,13 +1839,21 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
     //    plus an extra buffer to account for incorrect minUndequeuedBufs
     CODEC_LOGI("OMX-buffers: min=%u actual=%u undeq=%d+1",
             def.nBufferCountMin, def.nBufferCountActual, minUndequeuedBufs);
-
+#ifdef BOARD_CANT_REALLOCATE_OMX_BUFFERS
+    // Some devices don't like to set OMX_IndexParamPortDefinition at this
+    // point (even with an unmodified def), so skip it if possible.
+    // This check was present in KitKat.
+    if (def.nBufferCountActual < def.nBufferCountMin + minUndequeuedBufs) {
+#endif
+#ifdef STE_HARDWARE
+    for (OMX_U32 extraBuffers = 1; /* condition inside loop */; extraBuffers--) {
+#else
     for (OMX_U32 extraBuffers = 2 + 1; /* condition inside loop */; extraBuffers--) {
+#endif
         OMX_U32 newBufferCount =
             def.nBufferCountMin + minUndequeuedBufs + extraBuffers;
         def.nBufferCountActual = newBufferCount;
-        err = mOMXNode->setParameter(
-                OMX_IndexParamPortDefinition, &def, sizeof(def));
+        err = mOMXNode->setParameter(OMX_IndexParamPortDefinition, &def, sizeof(def));
 
         if (err == OK) {
             minUndequeuedBufs += extraBuffers;
@@ -1842,6 +1869,9 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
     }
     CODEC_LOGI("OMX-buffers: min=%u actual=%u undeq=%d+1",
             def.nBufferCountMin, def.nBufferCountActual, minUndequeuedBufs);
+#ifdef BOARD_CANT_REALLOCATE_OMX_BUFFERS
+    }
+#endif
 
     err = native_window_set_buffer_count(
             mNativeWindow.get(), def.nBufferCountActual);
