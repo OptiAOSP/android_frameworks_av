@@ -1,6 +1,6 @@
 cc_library_headers {
     name: "libstagefright_headers",
-    export_include_dirs: ["include"],
+    export_include_dirs: ["include", "codecs/common/include"],
     vendor_available: true,
 }
 
@@ -52,6 +52,7 @@ cc_library_shared {
         "NuMediaExtractor.cpp",
         "OMXClient.cpp",
         "OMXCodec.cpp",
+        "codecs/common/cmnMemory.c",
         "OmxInfoBuilder.cpp",
         "OggExtractor.cpp",
         "SampleIterator.cpp",

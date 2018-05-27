@@ -76,6 +76,26 @@ struct LWOmxNode : public H2BConverter<IOmxNode, IOMXNode, BnOMXNode> {
             OMX_U32 port_index, IOMX::PortMode mode) override;
     status_t storeMetaDataInBuffers(
             OMX_U32 port_index, OMX_BOOL enable, int32_t *type) override;
+
+    status_t allocateBufferWithBackup(
+            OMX_U32 port_index, const sp<IMemory> &params,
+            IOMX::buffer_id *buffer, OMX_U32 allottedSize) override;
+    status_t fillBuffer_legacy(IOMX::buffer_id buffer, int fenceFd = -1) override;
+
+    status_t emptyBuffer_legacy(
+            IOMX::buffer_id buffer,
+            OMX_U32 range_offset, OMX_U32 range_length,
+            OMX_U32 flags, OMX_TICKS timestamp, int fenceFd = -1) override;
+
+    status_t useBuffer_legacy(
+            OMX_U32 port_index, const sp<IMemory> &params,
+            IOMX::buffer_id *buffer, OMX_U32 allottedSize) override;
+/*
+    status_t useBuffer_legacy(int32_t a, int32_t b, int32_t c, int32_t d) override;
+    status_t fillBuffer_legacy(int32_t a, int32_t b) override;
+    status_t emptyBuffer_legacy(int32_t a, int32_t b, int32_t c, int32_t d, int32_t e, int32_t f) override;
+    status_t allocateBufferWithBackup(int32_t a, int32_t b, int32_t c, int32_t d) override;
+*/
     status_t prepareForAdaptivePlayback(
             OMX_U32 portIndex, OMX_BOOL enable,
             OMX_U32 maxFrameWidth, OMX_U32 maxFrameHeight) override;
@@ -125,6 +145,10 @@ struct TWOmxNode : public IOmxNode {
     Return<Status> setPortMode(uint32_t portIndex, PortMode mode) override;
     Return<Status> storeMetaDataInBuffers(
             uint32_t portIndex, bool enable, int32_t type) override;
+    Return<Status> useBuffer_legacy() override;
+    Return<Status> fillBuffer_legacy() override;
+    Return<Status> emptyBuffer_legacy() override;
+    Return<Status> allocateBufferWithBackup() override;
     Return<Status> prepareForAdaptivePlayback(
             uint32_t portIndex, bool enable,
             uint32_t maxFrameWidth, uint32_t maxFrameHeight) override;

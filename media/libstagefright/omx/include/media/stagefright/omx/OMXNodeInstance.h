@@ -62,6 +62,28 @@ struct OMXNodeInstance : public BnOMXNode {
     status_t storeMetaDataInBuffers(
         OMX_U32 port_index, OMX_BOOL enable, int32_t *type);
 
+
+    status_t allocateBufferWithBackup(
+            OMX_U32 portIndex, const sp<IMemory> &params,
+            IOMX::buffer_id *buffer, OMX_U32 allottedSize);
+
+    status_t useBuffer_legacy(
+            OMX_U32 portIndex, const sp<IMemory> &params,
+            IOMX::buffer_id *buffer, OMX_U32 allottedSize);
+
+    status_t fillBuffer_legacy(IOMX::buffer_id buffer, int fenceFd);
+
+    status_t emptyBuffer_legacy(
+            IOMX::buffer_id buffer,
+            OMX_U32 rangeOffset, OMX_U32 rangeLength,
+            OMX_U32 flags, OMX_TICKS timestamp, int fenceFd);
+
+/*
+    status_t useBuffer();
+    status_t fillBuffer();
+    status_t emptyBuffer();
+    status_t allocateBufferWithBackup();
+*/
     status_t getGraphicBufferUsage(OMX_U32 portIndex, OMX_U32* usage);
 
     status_t prepareForAdaptivePlayback(
@@ -141,6 +163,7 @@ private:
     Mutex mOMXBufferSourceLock;
     // Access these through getBufferSource().
     sp<IOMXBufferSource> mOMXBufferSource;
+    //sp<GraphicBufferSource> mGraphicBufferSource;
 
     struct ActiveBuffer {
         OMX_U32 mPortIndex;
@@ -280,6 +303,10 @@ private:
 
     sp<IOMXBufferSource> getBufferSource();
     void setBufferSource(const sp<IOMXBufferSource> &bufferSource);
+/*
+    sp<GraphicBufferSource> getGraphicBufferSource();
+    void setGraphicBufferSource(const sp<GraphicBufferSource>& bufferSource);
+*/
     // Called when omx_message::FILL_BUFFER_DONE is received. (Currently the
     // buffer source will fix timestamp in the header if needed.)
     void codecBufferFilled(omx_message &msg);

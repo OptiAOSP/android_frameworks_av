@@ -1686,7 +1686,7 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
                 err = mOMXNode->allocateBufferWithBackup(
                         portIndex, mem, &buffer, mem->size());
         } else {
-            err = mOMXNode->useBuffer( portIndex, mem, &buffer, mem->size());
+            err = mOMXNode->useBuffer_legacy(portIndex, mem, &buffer, mem->size());
         }
 
         if (err != OK) {
@@ -1995,6 +1995,7 @@ OMXCodec::BufferInfo* OMXCodec::dequeueBufferFromNativeWindow() {
 
     return bufInfo;
 #endif
+    return NULL;
 }
 
 int64_t OMXCodec::getDecodingTimeUs() {
@@ -2918,7 +2919,7 @@ bool OMXCodec::drainInputBuffer(BufferInfo *info) {
 
         CODEC_LOGV("calling emptyBuffer with codec specific data");
 
-        status_t err = mOMXNode->emptyBuffer(
+        status_t err = mOMXNode->emptyBuffer_legacy(
                 info->mBuffer, 0, size,
                 OMX_BUFFERFLAG_ENDOFFRAME | OMX_BUFFERFLAG_CODECCONFIG,
                 0);
@@ -3110,7 +3111,7 @@ bool OMXCodec::drainInputBuffer(BufferInfo *info) {
                info->mBuffer, offset,
                (long long)timestampUs, timestampUs / 1E6);
 
-    err = mOMXNode->emptyBuffer(
+    err = mOMXNode->emptyBuffer_legacy(
             info->mBuffer, 0, offset,
             flags, timestampUs);
 
@@ -3134,7 +3135,7 @@ void OMXCodec::fillOutputBuffer(BufferInfo *info) {
     }
 
     CODEC_LOGV("Calling fillBuffer on buffer %u", info->mBuffer);
-    status_t err = mOMXNode->fillBuffer( info->mBuffer);
+    status_t err = mOMXNode->fillBuffer_legacy(info->mBuffer);
 
     if (err != OK) {
         CODEC_LOGE("fillBuffer failed w/ error 0x%08x", err);
@@ -4048,8 +4049,8 @@ status_t OMXCodec::initNativeWindow() {
         return err;
     }
 
-    return OK;
 #endif
+    return OK;
 }
 
 void OMXCodec::initNativeWindowCrop() {

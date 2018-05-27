@@ -99,6 +99,52 @@ status_t LWOmxNode::storeMetaDataInBuffers(
     return toStatusT(mBase->storeMetaDataInBuffers(port_index, toRawBool(enable), *type));
 }
 
+status_t LWOmxNode::useBuffer_legacy(OMX_U32 port_index, const sp<IMemory> &params,
+            IOMX::buffer_id *buffer, OMX_U32 allottedSize) {
+    (void)port_index;
+    (void)params;
+    (void)buffer;
+    (void)allottedSize;
+
+    LOG_ALWAYS_FATAL("%s: is not implemented!", __func__);
+    return OK;
+}
+status_t LWOmxNode::fillBuffer_legacy(IOMX::buffer_id buffer, int fenceFd) {
+    (void)buffer;
+    (void)fenceFd;
+
+    LOG_ALWAYS_FATAL("%s: is not implemented!", __func__);
+    return OK;
+}
+status_t LWOmxNode::emptyBuffer_legacy(IOMX::buffer_id buffer,
+            OMX_U32 range_offset, OMX_U32 range_length,
+            OMX_U32 flags, OMX_TICKS timestamp, int fenceFd) {
+    (void)buffer;
+    (void)range_offset;
+    (void)range_length;
+    (void)flags;
+    (void)timestamp;
+    (void)fenceFd;
+
+    LOG_ALWAYS_FATAL("%s: is not implemented!", __func__);
+    return OK;
+}
+status_t LWOmxNode::allocateBufferWithBackup(OMX_U32 port_index, const sp<IMemory> &params,
+            IOMX::buffer_id *buffer, OMX_U32 allottedSize) {
+    (void)port_index;
+    (void)params;
+    (void)buffer;
+    (void)allottedSize;
+
+    LOG_ALWAYS_FATAL("%s: is not implemented!", __func__);
+    return OK;
+}
+/*
+status_t LWOmxNode::useBuffer_legacy(int32_t a, int32_t b, int32_t c, int32_t d) { return OK; }
+status_t LWOmxNode::fillBuffer_legacy(int32_t a, int32_t b) { return OK; }
+status_t LWOmxNode::emptyBuffer_legacy(int32_t a, int32_t b, int32_t c, int32_t d, int32_t e, int32_t f) { return OK; }
+status_t LWOmxNode::allocateBufferWithBackup(int32_t a, int32_t b, int32_t c, int32_t d) { return OK; }
+*/
 status_t LWOmxNode::prepareForAdaptivePlayback(
         OMX_U32 portIndex, OMX_BOOL enable,
         OMX_U32 maxFrameWidth, OMX_U32 maxFrameHeight) {
@@ -311,6 +357,11 @@ Return<Status> TWOmxNode::storeMetaDataInBuffers(
     int32_t lType = type;
     return toStatus(mBase->storeMetaDataInBuffers(portIndex, toEnumBool(enable), &lType));
 }
+
+Return<Status> TWOmxNode::useBuffer_legacy() { return toStatus(OK); }
+Return<Status> TWOmxNode::fillBuffer_legacy() { return toStatus(OK); }
+Return<Status> TWOmxNode::emptyBuffer_legacy() { return toStatus(OK); }
+Return<Status> TWOmxNode::allocateBufferWithBackup() { return toStatus(OK); }
 
 Return<Status> TWOmxNode::prepareForAdaptivePlayback(
         uint32_t portIndex, bool enable,
