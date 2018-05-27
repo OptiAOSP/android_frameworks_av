@@ -46,6 +46,8 @@
 #include <media/stagefright/MediaDefs.h>
 #include <media/stagefright/MetaData.h>
 #include <media/stagefright/MediaCodecSource.h>
+#include <media/stagefright/OMXClient.h>
+#include <media/stagefright/OMXCodec.h>
 #include <media/stagefright/PersistentSurface.h>
 #include <media/MediaProfiles.h>
 #include <camera/CameraParameters.h>
@@ -1212,12 +1214,19 @@ status_t StagefrightRecorder::setupRTPRecording() {
         return BAD_VALUE;
     }
 
-    sp<MediaCodecSource> source;
 
     if (mAudioSource != AUDIO_SOURCE_CNT) {
+    sp<MediaCodecSource> source;
+
         source = createAudioSource();
         mAudioEncoderSource = source;
+
+    mWriter = new ARTPWriter(mOutputFd);
+    mWriter->addSource(source);
+    mWriter->setListener(mListener);
     } else {
+    sp<MediaSource> source;
+
         setDefaultVideoEncoderIfNecessary();
 
         sp<MediaSource> mediaSource;
@@ -1231,11 +1240,12 @@ status_t StagefrightRecorder::setupRTPRecording() {
             return err;
         }
         mVideoEncoderSource = source;
-    }
 
     mWriter = new ARTPWriter(mOutputFd);
     mWriter->addSource(source);
     mWriter->setListener(mListener);
+
+    }
 
     return OK;
 }
@@ -1271,7 +1281,7 @@ status_t StagefrightRecorder::setupMPEG2TSRecording() {
             return err;
         }
 
-        sp<MediaCodecSource> encoder;
+        sp<MediaSource> encoder;
         err = setupVideoEncoder(mediaSource, &encoder);
 
         if (err != OK) {
@@ -1616,29 +1626,34 @@ status_t StagefrightRecorder::setupCameraSource(
 
 status_t StagefrightRecorder::setupVideoEncoder(
         const sp<MediaSource> &cameraSource,
-        sp<MediaCodecSource> *source) {
+        sp<MediaSource> *source) {
     source->clear();
 
     sp<AMessage> format = new AMessage();
+    sp<MetaData> enc_meta = new MetaData;
+    enc_meta->setInt32(kKeyBitRate, mVideoBitRate);
+    enc_meta->setInt32(kKeyFrameRate, mFrameRate);
+
 
     switch (mVideoEncoder) {
         case VIDEO_ENCODER_H263:
-            format->setString("mime", MEDIA_MIMETYPE_VIDEO_H263);
+            enc_meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_VIDEO_H263);
             break;
 
         case VIDEO_ENCODER_MPEG_4_SP:
-            format->setString("mime", MEDIA_MIMETYPE_VIDEO_MPEG4);
+            enc_meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_VIDEO_MPEG4);
             break;
 
         case VIDEO_ENCODER_H264:
-            format->setString("mime", MEDIA_MIMETYPE_VIDEO_AVC);
+            enc_meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_VIDEO_AVC);
             break;
 
         case VIDEO_ENCODER_VP8:
-            format->setString("mime", MEDIA_MIMETYPE_VIDEO_VP8);
+            enc_meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_VIDEO_VP8);
             break;
 
         case VIDEO_ENCODER_HEVC:
+            enc_meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_VIDEO_HEVC);
             format->setString("mime", MEDIA_MIMETYPE_VIDEO_HEVC);
             break;
 
@@ -1657,96 +1672,52 @@ status_t StagefrightRecorder::setupVideoEncoder(
         CHECK(meta->findInt32(kKeySliceHeight, &sliceHeight));
         CHECK(meta->findInt32(kKeyColorFormat, &colorFormat));
 
-        format->setInt32("width", width);
-        format->setInt32("height", height);
-        format->setInt32("stride", stride);
-        format->setInt32("slice-height", sliceHeight);
-        format->setInt32("color-format", colorFormat);
+        enc_meta->setInt32(kKeyWidth, width);
+        enc_meta->setInt32(kKeyHeight, height);
+        enc_meta->setInt32(kKeyIFramesInterval, mIFramesIntervalSec);
+        enc_meta->setInt32(kKeyStride, stride);
+        enc_meta->setInt32(kKeySliceHeight, sliceHeight);
+        enc_meta->setInt32(kKeyColorFormat, colorFormat);
     } else {
-        format->setInt32("width", mVideoWidth);
-        format->setInt32("height", mVideoHeight);
-        format->setInt32("stride", mVideoWidth);
-        format->setInt32("slice-height", mVideoHeight);
-        format->setInt32("color-format", OMX_COLOR_FormatAndroidOpaque);
-
-        // set up time lapse/slow motion for surface source
-        if (mCaptureFpsEnable) {
-            if (!(mCaptureFps > 0.)) {
-                ALOGE("Invalid mCaptureFps value: %lf", mCaptureFps);
-                return BAD_VALUE;
-            }
-            format->setDouble("time-lapse-fps", mCaptureFps);
-        }
+        enc_meta->setInt32(kKeyWidth, mVideoWidth);
+        enc_meta->setInt32(kKeyHeight, mVideoHeight);
+        enc_meta->setInt32(kKeyIFramesInterval, mIFramesIntervalSec);
+        enc_meta->setInt32(kKeyStride, mVideoWidth);
+        enc_meta->setInt32(kKeySliceHeight, mVideoHeight);
+        enc_meta->setInt32(kKeyColorFormat, OMX_COLOR_FormatAndroidOpaque);
     }
 
-    format->setInt32("bitrate", mVideoBitRate);
-    format->setInt32("frame-rate", mFrameRate);
-    format->setInt32("i-frame-interval", mIFramesIntervalSec);
+    enc_meta->setInt32(kKeyBitRate, mVideoBitRate);
+    enc_meta->setInt32(kKeyFrameRate, mFrameRate);
+    enc_meta->setInt32(kKeyIFramesInterval, mIFramesIntervalSec);
 
     if (mVideoTimeScale > 0) {
-        format->setInt32("time-scale", mVideoTimeScale);
+        enc_meta->setInt32(kKeyTimeScale, mVideoTimeScale);
     }
     if (mVideoEncoderProfile != -1) {
-        format->setInt32("profile", mVideoEncoderProfile);
+        enc_meta->setInt32(kKeyVideoProfile, mVideoEncoderProfile);
     }
     if (mVideoEncoderLevel != -1) {
-        format->setInt32("level", mVideoEncoderLevel);
+        enc_meta->setInt32(kKeyVideoLevel, mVideoEncoderLevel);
     }
 
-    uint32_t tsLayers = 1;
-    bool preferBFrames = true; // we like B-frames as it produces better quality per bitrate
-    format->setInt32("priority", 0 /* realtime */);
-    float maxPlaybackFps = mFrameRate; // assume video is only played back at normal speed
+
+    OMXClient client;
+    CHECK_EQ(client.connect(), (status_t)OK);
+
+    uint32_t encoder_flags = 0;
+    if (mMetaDataStoredInVideoBuffers != kMetadataBufferTypeInvalid) {
+        encoder_flags |= OMXCodec::kStoreMetaDataInVideoBuffers;
+    }
 
     if (mCaptureFpsEnable) {
-        format->setFloat("operating-rate", mCaptureFps);
-
-        // enable layering for all time lapse and high frame rate recordings
-        if (mFrameRate / mCaptureFps >= 1.9) { // time lapse
-            preferBFrames = false;
-            tsLayers = 2; // use at least two layers as resulting video will likely be sped up
-        } else if (mCaptureFps > maxPlaybackFps) { // slow-mo
-            maxPlaybackFps = mCaptureFps; // assume video will be played back at full capture speed
-            preferBFrames = false;
-        }
+        encoder_flags |= OMXCodec::kOnlySubmitOneInputBufferAtOneTime;
     }
 
-    for (uint32_t tryLayers = 1; tryLayers <= kMaxNumVideoTemporalLayers; ++tryLayers) {
-        if (tryLayers > tsLayers) {
-            tsLayers = tryLayers;
-        }
-        // keep going until the base layer fps falls below the typical display refresh rate
-        float baseLayerFps = maxPlaybackFps / (1 << (tryLayers - 1));
-        if (baseLayerFps < kMinTypicalDisplayRefreshingRate / 0.9) {
-            break;
-        }
-    }
-
-    if (tsLayers > 1) {
-        uint32_t bLayers = std::min(2u, tsLayers - 1); // use up-to 2 B-layers
-        uint32_t pLayers = tsLayers - bLayers;
-        format->setString(
-                "ts-schema", AStringPrintf("android.generic.%u+%u", pLayers, bLayers));
-
-        // TODO: some encoders do not support B-frames with temporal layering, and we have a
-        // different preference based on use-case. We could move this into camera profiles.
-        format->setInt32("android._prefer-b-frames", preferBFrames);
-    }
-
-    if (mMetaDataStoredInVideoBuffers != kMetadataBufferTypeInvalid) {
-        format->setInt32("android._input-metadata-buffer-type", mMetaDataStoredInVideoBuffers);
-    }
-
-    uint32_t flags = 0;
-    if (cameraSource == NULL) {
-        flags |= MediaCodecSource::FLAG_USE_SURFACE_INPUT;
-    } else {
-        // require dataspace setup even if not using surface input
-        format->setInt32("android._using-recorder", 1);
-    }
-
-    sp<MediaCodecSource> encoder = MediaCodecSource::Create(
-            mLooper, format, cameraSource, mPersistentSurface, flags);
+    sp<MediaSource> encoder = OMXCodec::Create(
+            client.interface(), enc_meta,
+            true /* createEncoder */, cameraSource,
+            NULL, encoder_flags);
     if (encoder == NULL) {
         ALOGE("Failed to create video encoder");
         // When the encoder fails to be created, we need
@@ -1756,10 +1727,6 @@ status_t StagefrightRecorder::setupVideoEncoder(
             cameraSource->stop();
         }
         return UNKNOWN_ERROR;
-    }
-
-    if (cameraSource == NULL) {
-        mGraphicBufferProducer = encoder->getGraphicBufferProducer();
     }
 
     *source = encoder;
@@ -1818,7 +1785,7 @@ status_t StagefrightRecorder::setupMPEG4orWEBMRecording() {
             return err;
         }
 
-        sp<MediaCodecSource> encoder;
+        sp<MediaSource> encoder;
         err = setupVideoEncoder(mediaSource, &encoder);
         if (err != OK) {
             return err;
@@ -1913,7 +1880,7 @@ status_t StagefrightRecorder::pause() {
         mAudioEncoderSource->pause();
     }
     if (mVideoEncoderSource != NULL) {
-        mVideoEncoderSource->pause(meta.get());
+        mVideoEncoderSource->pause(/*meta.get()*/);
     }
 
     return OK;
@@ -1934,17 +1901,28 @@ status_t StagefrightRecorder::resume() {
 
     int64_t bufferStartTimeUs = 0;
     bool allSourcesStarted = true;
-    for (const auto &source : { mAudioEncoderSource, mVideoEncoderSource }) {
-        if (source == nullptr) {
-            continue;
-        }
-        int64_t timeUs = source->getFirstSampleSystemTimeUs();
-        if (timeUs < 0) {
-            allSourcesStarted = false;
-        }
-        if (bufferStartTimeUs < timeUs) {
-            bufferStartTimeUs = timeUs;
-        }
+    int64_t timeUs;
+    {
+        if (mAudioEncoderSource != nullptr) {
+	        timeUs = mAudioEncoderSource->getFirstSampleSystemTimeUs();
+	        if (timeUs < 0) {
+	            allSourcesStarted = false;
+	        }
+	        if (bufferStartTimeUs < timeUs) {
+	            bufferStartTimeUs = timeUs;
+	        }
+	 }
+#if 0
+        if (mVideoEncoderSource != nullptr) {
+	        timeUs = mVideoEncoderSource->getFirstSampleSystemTimeUs();
+	        if (timeUs < 0) {
+	            allSourcesStarted = false;
+	        }
+	        if (bufferStartTimeUs < timeUs) {
+	            bufferStartTimeUs = timeUs;
+	        }
+	 }
+#endif
     }
 
     if (allSourcesStarted) {
@@ -1960,12 +1938,18 @@ status_t StagefrightRecorder::resume() {
     }
     sp<MetaData> meta = new MetaData;
     meta->setInt64(kKeyTime, resumeStartTimeUs);
-    for (const auto &source : { mAudioEncoderSource, mVideoEncoderSource }) {
-        if (source == nullptr) {
-            continue;
+
+    {
+        if (mAudioEncoderSource != nullptr) {
+            mAudioEncoderSource->setInputBufferTimeOffset((int64_t)timeOffset);
+            mAudioEncoderSource->start();
+         }
+#if 0
+        if (mVideoEncoderSource != nullptr) {
+            mVideoEncoderSource->setInputBufferTimeOffset((int64_t)timeOffset);
+            mVideoEncoderSource->start();
         }
-        source->setInputBufferTimeOffset((int64_t)timeOffset);
-        source->start(meta.get());
+#endif
     }
     mPauseStartTimeUs = 0;
 
@@ -1983,12 +1967,15 @@ status_t StagefrightRecorder::stop() {
     }
 
     int64_t stopTimeUs = systemTime() / 1000;
-    for (const auto &source : { mAudioEncoderSource, mVideoEncoderSource }) {
-        if (source != nullptr && OK != source->setStopTimeUs(stopTimeUs)) {
-            ALOGW("Failed to set stopTime %lld us for %s",
-                    (long long)stopTimeUs, source->isVideo() ? "Video" : "Audio");
+        if (mAudioEncoderSource != nullptr && OK != mAudioEncoderSource->setStopTimeUs(stopTimeUs)) {
+            ALOGW("Failed to set stopTime %lld us for Video",
+                    (long long)stopTimeUs);
         }
-    }
+
+        if (mVideoEncoderSource != nullptr && OK != mVideoEncoderSource->setStopTimeUs(stopTimeUs)) {
+            ALOGW("Failed to set stopTime %lld us for Video",
+                    (long long)stopTimeUs);
+        }
 
     if (mWriter != NULL) {
         err = mWriter->stop();

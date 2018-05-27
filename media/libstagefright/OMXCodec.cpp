@@ -70,7 +70,7 @@ const static int64_t kBufferFilledEventTimeOutNs = 3000000000LL;
 const static uint32_t kMaxColorFormatSupported = 1000;
 
 #define FACTORY_CREATE_ENCODER(name) \
-static sp<IMediaSource> Make##name(const sp<IMediaSource> &source, const sp<MetaData> &meta) { \
+static sp<MediaSource> Make##name(const sp<MediaSource> &source, const sp<MetaData> &meta) { \
     return new name(source, meta); \
 }
 
@@ -78,12 +78,12 @@ static sp<IMediaSource> Make##name(const sp<IMediaSource> &source, const sp<Meta
 
 FACTORY_CREATE_ENCODER(AACEncoder)
 
-static sp<IMediaSource> InstantiateSoftwareEncoder(
-        const char *name, const sp<IMediaSource> &source,
+static sp<MediaSource> InstantiateSoftwareEncoder(
+        const char *name, const sp<MediaSource> &source,
         const sp<MetaData> &meta) {
     struct FactoryInfo {
         const char *name;
-        sp<IMediaSource> (*CreateFunc)(const sp<IMediaSource> &, const sp<MetaData> &);
+        sp<MediaSource> (*CreateFunc)(const sp<MediaSource> &, const sp<MetaData> &);
     };
 
     static const FactoryInfo kFactoryInfo[] = {
@@ -150,7 +150,8 @@ static void InitOMXParams(T *params) {
 }
 
 static bool IsSoftwareCodec(const char *componentName) {
-    if (!strncmp("OMX.google.", componentName, 11)) {
+    if (!strncmp("OMX.google.", componentName, 11)
+        || !strncmp("OMX.ffmpeg.", componentName, 11)) {
         return true;
     }
 
@@ -271,10 +272,10 @@ uint32_t OMXCodec::getComponentQuirks(
 }
 
 // static
-sp<IMediaSource> OMXCodec::Create(
+sp<MediaSource> OMXCodec::Create(
         const sp<IOMX> &omx,
         const sp<MetaData> &meta, bool createEncoder,
-        const sp<IMediaSource> &source,
+        const sp<MediaSource> &source,
         const char *matchComponentName,
         uint32_t flags) {
     int32_t requiresSecureBuffers;
@@ -319,7 +320,7 @@ sp<IMediaSource> OMXCodec::Create(
         }
 
         if (createEncoder) {
-            sp<IMediaSource> softwareCodec =
+            sp<MediaSource> softwareCodec =
                 InstantiateSoftwareEncoder(componentName, source, meta);
 
             if (softwareCodec != NULL) {
@@ -1289,8 +1290,6 @@ status_t OMXCodec::setVideoOutputFormat(
         compressionFormat = OMX_VIDEO_CodingVP9;
     } else if (!strcasecmp(MEDIA_MIMETYPE_VIDEO_MPEG2, mime)) {
         compressionFormat = OMX_VIDEO_CodingMPEG2;
-    } else if (!strcasecmp(MEDIA_MIMETYPE_VIDEO_DOLBY_VISION, mime)) {
-        compressionFormat = OMX_VIDEO_CodingDolbyVision;
     } else {
         ALOGE("Not a supported video mime type: %s", mime);
         CHECK(!"Should not be here. Not a supported video mime type.");
@@ -1409,7 +1408,7 @@ OMXCodec::OMXCodec(const sp<IOMX> &omx, sp<IOMXNode> OMXNode,
         bool isEncoder,
         const char *mime,
         const char *componentName,
-        const sp<IMediaSource> &source)
+        const sp<MediaSource> &source)
     : mOMX(omx),
       mOMXNode(OMXNode),
       mQuirks(quirks),
@@ -1482,8 +1481,6 @@ void OMXCodec::setComponentRole(sp<IOMXNode> OMXNode, bool isEncoder,
             "video_decoder.vp9", "video_encoder.vp9" },
         { MEDIA_MIMETYPE_AUDIO_RAW,
             "audio_decoder.raw", "audio_encoder.raw" },
-        { MEDIA_MIMETYPE_VIDEO_DOLBY_VISION,
-            "video_decoder.dolby-vision", "video_encoder.dolby-vision" },
         { MEDIA_MIMETYPE_AUDIO_FLAC,
             "audio_decoder.flac", "audio_encoder.flac" },
         { MEDIA_MIMETYPE_AUDIO_MSGSM,
@@ -1590,6 +1587,8 @@ bool OMXCodec::isIntermediateState(State state) {
     return state == LOADED_TO_IDLE
         || state == IDLE_TO_EXECUTING
         || state == EXECUTING_TO_IDLE
+        || state == PAUSING
+        || state == FLUSHING
         || state == IDLE_TO_LOADED
         || state == RECONFIGURING;
 }
@@ -2468,6 +2467,7 @@ void OMXCodec::onCmdComplete(OMX_COMMANDTYPE cmd, OMX_U32 data) {
 
                     // We implicitly resume pulling on our upstream source.
                     mPaused = false;
+                    mNoMoreOutputData = false;
 
                     drainInputBuffers();
                     fillOutputBuffers();
@@ -2581,6 +2581,14 @@ void OMXCodec::onStateChange(OMX_STATETYPE newState) {
             CODEC_LOGV("Now Loaded.");
 
             setState(LOADED);
+            break;
+        }
+
+        case OMX_StatePause:
+        {
+            CODEC_LOGV("Now paused.");
+            CHECK_EQ((int)mState, (int)PAUSING);
+            setState(PAUSED);
             break;
         }
 
@@ -2699,7 +2707,7 @@ void OMXCodec::onPortSettingsChanged(OMX_U32 portIndex) {
 
 bool OMXCodec::flushPortAsync(OMX_U32 portIndex) {
     CHECK(mState == EXECUTING || mState == RECONFIGURING
-            || mState == EXECUTING_TO_IDLE);
+            || mState == EXECUTING_TO_IDLE || mState == FLUSHING);
 
     CODEC_LOGV("flushPortAsync(%u): we own %zu out of %zu buffers already.",
          portIndex, countBuffersWeOwn(mPortBuffers[portIndex]),
@@ -2749,7 +2757,7 @@ status_t OMXCodec::enablePortAsync(OMX_U32 portIndex) {
 }
 
 void OMXCodec::fillOutputBuffers() {
-    CHECK_EQ((int)mState, (int)EXECUTING);
+    CHECK(mState == EXECUTING || mState == FLUSHING);
 
     // This is a workaround for some decoders not properly reporting
     // end-of-output-stream. If we own all input buffers and also own
@@ -2776,7 +2784,7 @@ void OMXCodec::fillOutputBuffers() {
 }
 
 void OMXCodec::drainInputBuffers() {
-    CHECK(mState == EXECUTING || mState == RECONFIGURING);
+    CHECK(mState == EXECUTING || mState == RECONFIGURING || mState == FLUSHING);
 
     if (mFlags & kUseSecureInputBuffers) {
         Vector<BufferInfo> *buffers = &mPortBuffers[kPortIndexInput];
@@ -3501,21 +3509,8 @@ void OMXCodec::setJPEGInputFormat(
 }
 
 void OMXCodec::addCodecSpecificData(const void *data, size_t size) {
-
-    if (size > SIZE_MAX - (sizeof(CodecSpecificData) - 1)) {
-        // this would require the size to be ~4GB, which should be near impossible
-        // given that it is the size of an in-memory chunk of data
-        ALOGE("b/23540411");
-        return;
-    }
-
     CodecSpecificData *specific =
-        (CodecSpecificData *)malloc(sizeof(CodecSpecificData) - 1 + size);
-
-    if (specific == NULL) {
-        ALOGE("b/23540411");
-        return;
-    }
+        (CodecSpecificData *)malloc(sizeof(CodecSpecificData) + size - 1);
 
     specific->mSize = size;
     memcpy(specific->mData, data, size);
@@ -3533,6 +3528,11 @@ void OMXCodec::clearCodecSpecificData() {
 
 status_t OMXCodec::start(MetaData *meta) {
     Mutex::Autolock autoLock(mLock);
+
+    if (mPaused) {
+        status_t err = resumeLocked(true);
+        return err;
+    }
 
     if (mState != LOADED) {
         CODEC_LOGE("called start in the unexpected state: %d", mState);
@@ -3649,6 +3649,7 @@ status_t OMXCodec::stopOmxComponent_l() {
 #endif
         }
 
+        case PAUSED:
         case EXECUTING:
         {
             setState(EXECUTING_TO_IDLE);
@@ -3720,6 +3721,14 @@ status_t OMXCodec::read(
 
     Mutex::Autolock autoLock(mLock);
 
+    if (mPaused) {
+        err = resumeLocked(false);
+        if(err != OK) {
+            CODEC_LOGE("Failed to restart codec err= %d", err);
+            return err;
+        }
+    }
+
     if (mState != EXECUTING && mState != RECONFIGURING) {
         return UNKNOWN_ERROR;
     }
@@ -3776,6 +3785,8 @@ status_t OMXCodec::read(
         mFilledBuffers.clear();
 
         CHECK_EQ((int)mState, (int)EXECUTING);
+        //DSP supports flushing of ports simultaneously. Flushing individual port is not supported.
+        setState(FLUSHING);
 
         bool emulateInputFlushCompletion = !flushPortAsync(kPortIndexInput);
         bool emulateOutputFlushCompletion = !flushPortAsync(kPortIndexOutput);
@@ -3803,6 +3814,11 @@ status_t OMXCodec::read(
 
     if (mState == ERROR) {
         return UNKNOWN_ERROR;
+    }
+
+    if (seeking) {
+        CHECK_EQ((int)mState, (int)FLUSHING);
+        setState(EXECUTING);
     }
 
     if (mFilledBuffers.empty()) {
@@ -4244,11 +4260,59 @@ void OMXCodec::initOutputFormat(const sp<MetaData> &inputFormat) {
 }
 
 status_t OMXCodec::pause() {
-    Mutex::Autolock autoLock(mLock);
+   CODEC_LOGV("pause mState=%d", mState);
 
-    mPaused = true;
+   Mutex::Autolock autoLock(mLock);
 
-    return OK;
+   if (mState != EXECUTING) {
+       return UNKNOWN_ERROR;
+   }
+
+   while (isIntermediateState(mState)) {
+       mAsyncCompletion.wait(mLock);
+   }
+   if (!strncmp(mComponentName, "OMX.qcom.", 9)) {
+       status_t err = mOMXNode->sendCommand(OMX_CommandStateSet, OMX_StatePause);
+       CHECK_EQ(err, (status_t)OK);
+       setState(PAUSING);
+
+       mPaused = true;
+       while (mState != PAUSED && mState != ERROR) {
+           mAsyncCompletion.wait(mLock);
+       }
+       return mState == ERROR ? UNKNOWN_ERROR : OK;
+   } else {
+       mPaused = true;
+       return OK;
+   }
+
+}
+
+status_t OMXCodec::resumeLocked(bool drainInputBuf) {
+   CODEC_LOGV("resume mState=%d", mState);
+
+   if (!strncmp(mComponentName, "OMX.qcom.", 9)) {
+        while (isIntermediateState(mState)) {
+            mAsyncCompletion.wait(mLock);
+        }
+        CHECK_EQ(mState, (status_t)PAUSED);
+        status_t err = mOMXNode->sendCommand(
+        OMX_CommandStateSet, OMX_StateExecuting);
+        CHECK_EQ(err, (status_t)OK);
+        setState(IDLE_TO_EXECUTING);
+        mPaused = false;
+        while (mState != EXECUTING && mState != ERROR) {
+            mAsyncCompletion.wait(mLock);
+        }
+        if(drainInputBuf)
+            drainInputBuffers();
+        return mState == ERROR ? UNKNOWN_ERROR : OK;
+    } else {   // SW Codec
+        mPaused = false;
+        if(drainInputBuf)
+            drainInputBuffers();
+        return OK;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4303,6 +4367,7 @@ status_t QueryCodec(
     caps->mFlags = 0;
     caps->mComponentName = componentName;
 
+    // NOTE: OMX does not provide a way to query AAC profile support
     if (isVideo) {
         OMX_VIDEO_PARAM_PROFILELEVELTYPE param;
         InitOMXParams(&param);

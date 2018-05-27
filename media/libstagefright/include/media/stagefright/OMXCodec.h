@@ -39,7 +39,7 @@ struct OMXCodecObserver;
 struct CodecProfileLevel;
 class SkipCutBuffer;
 
-struct OMXCodec : public BnMediaSource,
+struct OMXCodec : public MediaSource,
                   public MediaBufferObserver {
     enum CreationFlags {
         kPreferSoftwareCodecs    = 1,
@@ -66,10 +66,10 @@ struct OMXCodec : public BnMediaSource,
         // Secure decoding mode
         kUseSecureInputBuffers = 256,
     };
-    static sp<IMediaSource> Create(
+    static sp<MediaSource> Create(
             const sp<IOMX> &omx,
             const sp<MetaData> &meta, bool createEncoder,
-            const sp<IMediaSource> &source,
+            const sp<MediaSource> &source,
             const char *matchComponentName = NULL,
             uint32_t flags = 0);
 
@@ -142,6 +142,9 @@ private:
         EXECUTING_TO_IDLE,
         IDLE_TO_LOADED,
         RECONFIGURING,
+        PAUSING,
+        FLUSHING,
+        PAUSED,
         ERROR
     };
 
@@ -193,7 +196,7 @@ private:
     char *mMIME;
     char *mComponentName;
     sp<MetaData> mOutputFormat;
-    sp<IMediaSource> mSource;
+    sp<MediaSource> mSource;
     Vector<CodecSpecificData *> mCodecSpecificData;
     size_t mCodecSpecificDataIndex;
 
@@ -236,7 +239,7 @@ private:
     OMXCodec(const sp<IOMX> &omx, sp<IOMXNode> OMXNode,
              uint32_t quirks, uint32_t flags,
              bool isEncoder, const char *mime, const char *componentName,
-             const sp<IMediaSource> &source);
+             const sp<MediaSource> &source);
 
     void addCodecSpecificData(const void *data, size_t size);
     void clearCodecSpecificData();
@@ -349,6 +352,7 @@ private:
 
     status_t waitForBufferFilled_l();
 
+    status_t resumeLocked(bool drainInputBuf);
     int64_t getDecodingTimeUs();
 
     status_t parseHEVCCodecSpecificData(
